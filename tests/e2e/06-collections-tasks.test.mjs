@@ -9,8 +9,8 @@ test.after(async () => { await env.close(); });
 test('collections list shows every open on-account balance', async () => {
   const { page } = env;
   await go(page, 'tahsilat');
-  assert.equal(await text(page, '#collections-total'), money(expected.totalAccount));
-  const open = await store(page, () => Array.from(Store.policies.values()).filter(p => p.account > 0).length);
+  assert.equal(await text(page, '#collections-total'), money(expected.totalOutstanding));
+  const open = await store(page, () => Array.from(Store.policies.values()).filter(p => Store.outstanding(p) > 0).length);
   assert.match(await text(page, 'tfoot'), new RegExp(open + ' poliçe'));
   const first = await page.$$eval('.tableview tbody tr td:nth-child(6)', tds => tds.slice(0, 3).map(t => t.textContent));
   assert.ok(first.length === 3, 'largest balances first');
@@ -33,7 +33,7 @@ test('a partial payment lowers the balance; a full payment closes it', async () 
   await page.fill('#pay-note', 'İlk taksit');
   await page.click('#pay-save');
   await page.waitForSelector('dialog[open]', { state: 'detached' });
-  assert.equal(await text(page, '#collections-total'), money(expected.totalAccount - 10000));
+  assert.equal(await text(page, '#collections-total'), money(expected.totalOutstanding - 10000));
   assert.match(await text(page, '.kpi:nth-child(2) .kpi-value'), new RegExp(money(10000).replace('.', '\\.')), 'collected this month');
   assert.match(await text(page, 'section.card:has(h2:has-text("Son tahsilatlar"))'), /İlk taksit/);
   await page.click('#pay-' + top.id);

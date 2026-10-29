@@ -243,15 +243,120 @@
     return res;
   }
 
+  // ------------------------------------------------------------------ cancellations (İptal)
+  /** Same row of the same month's İptal block: used to recognise it when the file is imported again. */
+  function cancelKey(c) {
+    function m(v) { return v == null ? '' : String(U.round2(v)); }
+    return [c.month, U.companyKey(c.company || ''), U.fold(c.policyText), nameKey(c.insuredName), m(c.card), m(c.account), m(c.cash)].join('|');
+  }
+
+  function refundOf(c) { return U.round2((c.card || 0) + (c.account || 0) + (c.cash || 0)); }
+
+  function noKey(s) { return U.fold(s).replace(/ /g, ''); }
+  function looksLikePolicyNo(s) { var k = noKey(s); return k.length >= 5 && /\d/.test(k); }
+
+  function sameName(a, b) {
+    var x = nameKey(a), y = nameKey(b);
+    if (!x || !y) return false;
+    return x === y || x.split(' ').sort().join(' ') === y.split(' ').sort().join(' ');
+  }
+
+  function monthEnd(key) { return U.addDays(U.addMonthsToKey(key, 1) + '-01', -1); }
+
+  /** How well policy p fits cancellation c; -1 when it cannot be the cancelled policy. */
+  function cancelScore(c, p, customer) {
+    if (!p.month || p.month > c.month) return -1;
+    var score = 0;
+    var byNo = false;
+    if (c.policyText && looksLikePolicyNo(c.policyText)) {
+      if (p.policyNo) {
+        if (noKey(p.policyNo) !== noKey(c.policyText)) return -1;
+        byNo = true;
+        score += 1000;
+      }
+    } else if (c.policyText) {
+      var cc = Schema.categoryOf(c.policyText), pc = Schema.categoryOf(p.policyType);
+      if (cc !== 'diger') {
+        if (p.policyType && pc !== cc) return -1;
+        if (p.policyType) score += 20;
+      } else if (p.policyType) {
+        var a = U.fold(c.policyText), b = U.fold(p.policyType);
+        if (a === b) score += 20;
+        else if (a && b && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0)) score += 10;
+        else return -1;
+      }
+    }
+    var nameOk = sameName(c.insuredName, p.insuredName) || sameName(c.insuredName, customer && customer.name) || sameName(c.insuredName, p.row && p.row.name);
+    if (nameOk) score += 100;
+    else if (!byNo) return -1;
+    if (c.company && p.company) {
+      if (U.companyKey(c.company) === U.companyKey(p.company)) score += 20;
+      else if (!byNo) return -1;
+    }
+    var refund = refundOf(c);
+    if (refund > 0 && p.premium) {
+      if (Math.abs(refund - p.premium) < 0.01) score += 5;
+      else if (refund > p.premium + 0.01) score -= 20;
+    }
+    ['card', 'account', 'cash'].forEach(function (k) { if (c[k] > 0 && p[k] > 0) score += 2; });
+    // a policy that had already ended by then was not cancelled
+    if (p.endDate && p.endDate <= monthEnd(c.month)) score -= 30;
+    return score;
+  }
+
+  /**
+   * Finds the policy each cancellation cancels, one policy per cancellation.
+   * cancels: [{ id, month, company, policyText, insuredName, card, account, cash, row? }]
+   * opts.taken: policy ids already cancelled by other (kept) cancellations.
+   * Returns Map(id -> { policyId, match: 'auto' | 'ambiguous' | 'none', candidates, score })
+   */
+  function matchCancellations(cancels, policies, customers, opts) {
+    opts = opts || {};
+    var taken = new Set(opts.taken || []);
+    var byName = new Map(), byNo = new Map();
+    policies.forEach(function (p) {
+      var c = customers && customers.get ? customers.get(p.customerId) : null;
+      [p.insuredName, c && c.name, p.row && p.row.name].forEach(function (n) {
+        var k = nameKey(n);
+        if (k) { pushTo(byName, k, p); pushTo(byName, k.split(' ').sort().join(' '), p); }
+      });
+      if (p.policyNo) pushTo(byNo, noKey(p.policyNo), p);
+    });
+    var out = new Map();
+    cancels.slice().sort(function (a, b) { return U.cmp(a.month, b.month) || (a.row || 0) - (b.row || 0); }).forEach(function (c) {
+      var k = nameKey(c.insuredName);
+      var pool = new Set((byName.get(k) || []).concat(byName.get(k.split(' ').sort().join(' ')) || []));
+      if (c.policyText && looksLikePolicyNo(c.policyText)) (byNo.get(noKey(c.policyText)) || []).forEach(function (p) { pool.add(p); });
+      var scored = [];
+      pool.forEach(function (p) {
+        if (taken.has(p.id)) return;
+        var s = cancelScore(c, p, customers && customers.get ? customers.get(p.customerId) : null);
+        if (s >= 0) scored.push({ p: p, s: s });
+      });
+      scored.sort(function (a, b) { return b.s - a.s || U.cmp(b.p.month, a.p.month) || U.cmp(b.p.endDate || '', a.p.endDate || ''); });
+      if (!scored.length) { out.set(c.id, { policyId: null, match: 'none', candidates: [], score: 0 }); return; }
+      var top = scored.filter(function (x) { return x.s === scored[0].s; });
+      if (top.length > 1) {
+        out.set(c.id, { policyId: null, match: 'ambiguous', candidates: top.map(function (x) { return x.p.id; }), score: scored[0].s });
+        return;
+      }
+      taken.add(scored[0].p.id);
+      out.set(c.id, { policyId: scored[0].p.id, match: 'auto', candidates: [], score: scored[0].s });
+    });
+    return out;
+  }
+
   // ------------------------------------------------------------------ renewals
   /**
    * For every policy: { state, daysLeft, successorId }
-   * state: renewed | lost | expired | due | active | none (no end date) | short (travel policies)
+   * state: renewed | lost | expired | due | active | none (no end date) | short (travel policies) | cancelled
+   * opts.cancelled: Map(policyId -> cancellation) for policies cancelled in an İptal block
    */
   function renewalInfo(policies, opts) {
     opts = opts || {};
     var today = opts.today || U.todayISO();
     var windowDays = opts.windowDays || 30;
+    var cancelled = opts.cancelled || null;
     var out = new Map();
     var byCustomer = U.groupBy(policies, function (p) { return p.customerId; });
     byCustomer.forEach(function (list) {
@@ -261,6 +366,13 @@
       meta.forEach(function (a) {
         var p = a.p;
         var info = { state: 'none', daysLeft: null, successorId: null };
+        if (cancelled && cancelled.has(p.id)) {
+          info.state = 'cancelled';
+          info.cancel = cancelled.get(p.id);
+          if (p.endDate) info.daysLeft = U.diffDays(today, p.endDate);
+          out.set(p.id, info);
+          return;
+        }
         if (!p.endDate) { out.set(p.id, info); return; }
         info.daysLeft = U.diffDays(today, p.endDate);
         if (NOT_RENEWABLE[a.cat]) { info.state = 'short'; out.set(p.id, info); return; }
@@ -268,6 +380,7 @@
         for (var i = 0; i < meta.length && !succ; i++) {
           var b = meta[i], q = b.p;
           if (q === p || !q.endDate || b.cat !== a.cat) continue;
+          if (cancelled && cancelled.has(q.id)) continue; // a cancelled renewal does not count
           if (a.cat === 'diger' && b.type !== a.type) continue;
           if (a.plate && b.plate && a.plate !== b.plate) continue;
           if (U.diffDays(p.endDate, q.endDate) < 60) continue;
@@ -294,7 +407,7 @@
     var base = 0, renewed = 0;
     policies.forEach(function (p) {
       var i = info.get(p.id);
-      if (!i || !p.endDate || i.state === 'short' || i.state === 'none') return;
+      if (!i || !p.endDate || i.state === 'short' || i.state === 'none' || i.state === 'cancelled') return;
       // a policy that ends today can still be renewed today, so only past expiries count
       if (p.endDate >= today || (from && p.endDate < from) || (to && p.endDate > to)) return;
       base++;
@@ -327,9 +440,11 @@
 
   // ------------------------------------------------------------------ money
   function paidOnAccount(p) { return U.round2(U.sum(p.payments || [], function (x) { return x.amount; })); }
-  function outstanding(p) {
+  /** What is still owed on the Cari part; credit = the refund an İptal row wrote to Cari. */
+  function outstanding(p, credit) {
     var due = p.account || 0;
     if (!due) return 0;
+    if (credit) due = Math.max(0, due - credit);
     return U.round2(due - paidOnAccount(p));
   }
 
@@ -429,6 +544,7 @@
     mergeCustomerInfo: mergeCustomerInfo, policyKey: policyKey, importRecords: importRecords,
     renewalInfo: renewalInfo, retention: retention, opportunities: opportunities, outstanding: outstanding,
     paidOnAccount: paidOnAccount, totals: totals, aggregate: aggregate, companyNames: companyNames,
-    duplicateGroups: duplicateGroups, NOT_RENEWABLE: NOT_RENEWABLE
+    duplicateGroups: duplicateGroups, NOT_RENEWABLE: NOT_RENEWABLE,
+    cancelKey: cancelKey, cancelScore: cancelScore, matchCancellations: matchCancellations, refundOf: refundOf, sameName: sameName
   };
 });

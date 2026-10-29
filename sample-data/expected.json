@@ -54,11 +54,11 @@
       "cash": 217712.37
     },
     "2026-02": {
-      "count": 60,
-      "premium": 825176.5,
-      "commission": 99832.33,
-      "newBusiness": 31,
-      "card": 542084.65,
+      "count": 61,
+      "premium": 833776.5,
+      "commission": 100506.48,
+      "newBusiness": 32,
+      "card": 550684.65,
       "account": 84981.75,
       "cash": 198110.1
     },
@@ -72,11 +72,11 @@
       "cash": 213174.87
     },
     "2026-04": {
-      "count": 64,
-      "premium": 1306289.0,
-      "commission": 173244.98,
-      "newBusiness": 20,
-      "card": 930663.55,
+      "count": 65,
+      "premium": 1316799.25,
+      "commission": 174150.27,
+      "newBusiness": 21,
+      "card": 941173.8,
       "account": 157752.0,
       "cash": 217873.45
     },
@@ -135,13 +135,13 @@
       "cash": 318447.26
     }
   },
-  "totalPolicies": 703,
-  "totalCustomers": 320,
-  "multiMonthCustomers": 167,
-  "totalPremium": 12937333.95,
-  "totalCommission": 1710732.28,
+  "totalPolicies": 705,
+  "totalCustomers": 321,
+  "multiMonthCustomers": 168,
+  "totalPremium": 12956444.2,
+  "totalCommission": 1712311.72,
   "totalAccount": 1796871.62,
-  "newBusiness": 305,
+  "newBusiness": 307,
   "renewalsInFile": 26,
   "homonyms": [
     "Mehmet Yılmaz",
@@ -164,8 +164,206 @@
     "premium": 83912.0
   },
   "dueIn30Days": 43,
+  "cancellations": {
+    "total": 22,
+    "auto": 20,
+    "ambiguous": 1,
+    "none": 1,
+    "byMonth": {
+      "2026-01": 3,
+      "2026-02": 2,
+      "2026-03": 3,
+      "2026-04": 2,
+      "2026-05": 2,
+      "2026-06": 2,
+      "2026-07": 3,
+      "2026-08": 1,
+      "2026-09": 3,
+      "2026-10": 1
+    },
+    "refundTotal": 288303.37,
+    "list": [
+      {
+        "month": "2026-01",
+        "insured": "ALİ GÜLER",
+        "policy": "Trafik",
+        "expect": "auto",
+        "policyNo": "TS-20250107098",
+        "refund": 20820.24
+      },
+      {
+        "month": "2026-01",
+        "insured": "ZAFER KARA",
+        "policy": "Kasko",
+        "expect": "auto",
+        "policyNo": "BR-20260111296",
+        "refund": 67622.3
+      },
+      {
+        "month": "2026-01",
+        "insured": "CEM KARA",
+        "policy": "İMM",
+        "expect": "auto",
+        "policyNo": "AZ-20260105895",
+        "refund": 4031.42
+      },
+      {
+        "month": "2026-02",
+        "insured": "OSMAN TAŞ",
+        "policy": "Trafik Sigortası",
+        "expect": "auto",
+        "policyNo": "AZ-20250121435",
+        "refund": 18452.88
+      },
+      {
+        "month": "2026-02",
+        "insured": "Burak Tekin",
+        "policy": "DASK",
+        "expect": "auto",
+        "policyNo": "AZ-20250112273",
+        "refund": 2478.92
+      },
+      {
+        "month": "2026-03",
+        "insured": "Abdullah Özkan",
+        "policy": "Konut Sigortası",
+        "expect": "auto",
+        "policyNo": "AZ-20260116810",
+        "refund": 5350.2
+      },
+      {
+        "month": "2026-03",
+        "insured": "ABDULLAH ÖZKAN",
+        "policy": "Dask",
+        "expect": "auto",
+        "policyNo": "AZ-20250116730",
+        "refund": 1686.06
+      },
+      {
+        "month": "2026-03",
+        "insured": "Fatma Çelik",
+        "policy": "Zorunlu Trafik",
+        "expect": "auto",
+        "policyNo": "SO-20260118612",
+        "refund": 18703.42
+      },
+      {
+        "month": "2026-04",
+        "insured": "SONGÜL TURAN",
+        "policy": "FERDİ KAZA",
+        "expect": "auto",
+        "policyNo": "AX-20260129533",
+        "refund": 726.31
+      },
+      {
+        "month": "2026-04",
+        "insured": "Yasin Kaplan",
+        "policy": "ZORUNLU TRAFİK",
+        "expect": "auto",
+        "policyNo": "RY-20260114384",
+        "refund": 8083.01
+      },
+      {
+        "month": "2026-05",
+        "insured": "FURKAN COŞKUN",
+        "policy": "TRAFİK",
+        "expect": "auto",
+        "policyNo": "AN-20260123628",
+        "refund": 11215.94
+      },
+      {
+        "month": "2026-06",
+        "insured": "KARDEŞLER GIDA SAN. TİC. A.Ş.",
+        "policy": "Trafik Sigortası",
+        "expect": "auto",
+        "policyNo": "TS-20250126724",
+        "refund": 8997.91
+      },
+      {
+        "month": "2026-06",
+        "insured": "Emre Tunç",
+        "policy": "DASK",
+        "expect": "auto",
+        "policyNo": "HD-20260130423",
+        "refund": 2177.1
+      },
+      {
+        "month": "2026-07",
+        "insured": "ÖZLEM TURAN",
+        "policy": "TSS",
+        "expect": "auto",
+        "policyNo": "AK-20250111508",
+        "refund": 20938.58
+      },
+      {
+        "month": "2026-07",
+        "insured": "Anadolu Nakliyat Ltd. Şti.",
+        "policy": "TRAFİK",
+        "expect": "auto",
+        "policyNo": "NV-20260128094",
+        "refund": 13975.89
+      },
+      {
+        "month": "2026-09",
+        "insured": "ŞAHİN TAŞ",
+        "policy": "Tamamlayıcı Sağlık",
+        "expect": "auto",
+        "policyNo": "AZ-20260131465",
+        "refund": 15783.04
+      },
+      {
+        "month": "2026-10",
+        "insured": "SEVGİ GÜNEŞ",
+        "policy": "TRAFİK",
+        "expect": "auto",
+        "policyNo": "MP-20250101659",
+        "refund": 5850.07
+      },
+      {
+        "month": "2026-08",
+        "insured": "Atlas Mimarlık",
+        "policy": "RY-20250128727",
+        "expect": "auto",
+        "policyNo": "RY-20250128727",
+        "refund": 11938.99
+      },
+      {
+        "month": "2026-09",
+        "insured": "LEVENT KILIÇ",
+        "policy": "TAMAMLAYICI SAĞLIK",
+        "expect": "auto",
+        "policyNo": "SO-20250100266",
+        "refund": 24395.84
+      },
+      {
+        "month": "2026-07",
+        "insured": "MELEK ÇELİK",
+        "policy": "Trafik Sigortası",
+        "expect": "auto",
+        "policyNo": "HD-20250109463",
+        "refund": 20640.75
+      },
+      {
+        "month": "2026-09",
+        "insured": "SERDAR BOZKURT",
+        "policy": "TRAFİK",
+        "expect": "ambiguous",
+        "policyNo": null,
+        "refund": 1234.5
+      },
+      {
+        "month": "2026-05",
+        "insured": "Nuri Tatlı",
+        "policy": "KASKO",
+        "expect": "none",
+        "policyNo": null,
+        "refund": 3200.0
+      }
+    ]
+  },
+  "totalOutstanding": 1788788.61,
   "byKind": {
-    "trafik": 239,
+    "trafik": 241,
     "kasko": 111,
     "imm": 18,
     "dask": 116,
@@ -183,7 +381,7 @@
     "Anadolu": 85,
     "Mapfre": 66,
     "HDI": 46,
-    "Sompo": 51,
+    "Sompo": 53,
     "Türkiye": 62,
     "Ray": 30,
     "Quick": 25,

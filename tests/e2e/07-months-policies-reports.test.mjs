@@ -28,8 +28,9 @@ test('a month opens exactly like its Excel page', async () => {
   await waitHash(page, '#ay-2026-03');
   assert.equal(await text(page, '#month-count'), String(expected.months['2026-03'].count));
   const head = await page.$$eval('table.sheet thead th', ths => ths.map(t => t.textContent.replace(/[▲▼]/g, '').trim()).filter(Boolean));
-  const excelHead = XLSX.utils.sheet_to_json(original.Sheets.MART, { header: 1 })[0];
-  assert.deepEqual(head, excelHead, 'same headers, same order, duplicates included');
+  const fullHead = Array.from(XLSX.utils.sheet_to_json(original.Sheets.MART, { header: 1 })[0]);
+  const excelHead = fullHead.slice(0, fullHead.indexOf(undefined));
+  assert.deepEqual(head, excelHead, 'same headers, same order, duplicates included; the İptal block is shown on its own');
   assert.equal(await page.$$eval('table.sheet tbody tr', r => r.length), expected.months['2026-03'].count);
   await page.fill('#month-q', 'kemal');
   await page.waitForFunction(() => document.querySelectorAll('table.sheet tbody tr').length === 2);
@@ -46,8 +47,11 @@ test('month export keeps the column layout and every row', async () => {
   assert.equal(file.name, 'mart-2026.xlsx');
   const rows = sheetRows(readBook(file.bytes), 'Mart 2026');
   const excelRows = XLSX.utils.sheet_to_json(original.Sheets.MART, { header: 1 });
-  assert.deepEqual(rows[0], excelRows[0]);
+  const plainRow = (r) => Array.from(r).map(v => v === undefined ? null : v);
+  assert.deepEqual(plainRow(rows[0]), plainRow(excelRows[0]), 'main columns, an empty column, then the İptal block');
   assert.equal(rows.length, excelRows.length);
+  const iptal = rows.slice(1).map(r => r.slice(-6)).filter(r => r.some(v => v != null));
+  assert.equal(iptal.length, expected.cancellations.byMonth['2026-03'], 'the month\'s İptal rows');
 });
 
 test('"add to this month" opens the form on that month', async () => {
@@ -111,7 +115,8 @@ test('reports: totals, date range and Excel report', async () => {
   assert.equal(await page.$$eval('#rep-monthly tbody tr', r => r.length), 3);
   const file = await download(page, () => page.click('#report-export'));
   const wb = readBook(file.bytes);
-  assert.equal(wb.SheetNames.length, 4);
+  assert.equal(wb.SheetNames.length, 5);
+  assert.equal(wb.SheetNames[4], 'İptaller');
   const monthly = sheetRows(wb, wb.SheetNames[0]);
   assert.equal(monthly.length, 1 + 3 + 1, 'header, 3 months, total');
   assert.equal(monthly[4][1], keys.reduce((s, k) => s + expected.months[k].count, 0));

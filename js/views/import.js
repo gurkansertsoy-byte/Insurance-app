@@ -163,6 +163,7 @@
           h('td', null, monthIn, h('div', { class: 'hint ' + src.tone, style: { marginTop: '3px' } }, src.text)),
           h('td', { class: 'r' }, h('strong', null, F.num(s.rows.length)), skipped ? h('div', { class: 'small muted' }, t('import.skippedRows', { n: skipped })) : null),
           h('td', null, h('div', { class: 'small' }, t('import.mappedCols', { n: mapped.length })),
+            s.cancelBlock ? h('div', { class: 'small', style: { color: 'var(--bad-ink)', marginTop: '3px' } }, icon('ban'), ' ', t('import.cancelBlock', { col: Importer.colLetter(s.cancelBlock.startCol), n: s.cancels.length })) : null,
             custom.length ? h('div', { class: 'chips', style: { marginTop: '4px' }, title: t('import.customHint') }, custom.slice(0, 6).map(function (c) { return h('span', { class: 'chip outline' }, '+ ' + c.header); }), custom.length > 6 ? h('span', { class: 'chip' }, '+' + (custom.length - 6)) : null) : null,
             dups.length ? h('div', { class: 'small muted', style: { marginTop: '3px' } }, t('import.dupCols', { cols: dups.map(function (c) { return c.header; }).join(', ') })) : null),
           h('td', null, h('div', { class: 'chips' }, warnings.length ? warnings : UI.pill(t('import.ok'), 'good'))),
@@ -211,7 +212,7 @@
         var built = Importer.buildRecords(a, { tidyNames: vs.tidyNames, lang: lang() });
         var saveMap = {};
         if (vs.remember) Object.keys(vs.overrides).forEach(function (k) { saveMap[k] = vs.overrides[k]; });
-        Store.importRecords(built.records, a, { mode: vs.mode, fileName: vs.file.name, saveMappings: saveMap }).then(function (r) {
+        Store.importRecords(built.records, a, { mode: vs.mode, fileName: vs.file.name, saveMappings: saveMap, cancels: built.cancels }).then(function (r) {
           vs.step = 'done';
           vs.result = r.result;
           vs.entry = r.entry;
@@ -243,7 +244,7 @@
     return h('div', { class: 'stack' },
       h('div', { class: 'callout good', id: 'import-done' }, icon('circle-check'), h('div', null, h('strong', null, t('import.doneTitle')), h('div', { class: 'small' }, t('import.doneText', { file: e.file, n: e.sheets, months: e.months.length ? F.month(e.months[0]) + (e.months.length > 1 ? ' – ' + F.month(e.months[e.months.length - 1]) : '') : '' })))),
       h('section', { class: 'card' }, h('div', { class: 'card-body stack' },
-        h('div', { class: 'result-grid' },
+        h('div', { class: 'result-grid' + (r.cancels && r.cancels.rows ? ' three' : '') },
           stat('res-added', t('import.r.added'), F.num(r.added.length)),
           stat('res-updated', t('import.r.updated'), F.num(r.updated.length), t('import.r.updatedSub')),
           stat('res-unchanged', t('import.r.unchanged'), F.num(r.unchanged + r.duplicateRows), r.duplicateRows ? t('import.r.dupRows', { n: r.duplicateRows }) : t('import.r.unchangedSub')),
@@ -251,6 +252,7 @@
           stat('res-customers', t('import.r.newCustomers'), F.num(r.customersAdded.length)),
           stat('res-matched', t('import.r.matched'), F.num(matched.tc + matched['name+phone'] + matched['name+plate'] + matched.name + matched['name-ambiguous']), t('import.r.matchedSub', { tc: matched.tc, np: matched['name+phone'] + matched['name+plate'], n: matched.name + matched['name-ambiguous'] })),
           stat('res-updatedc', t('import.r.updatedCustomers'), F.num(r.customersUpdated.length)),
+          r.cancels && r.cancels.rows ? stat('res-cancels', t('import.r.cancels'), F.num(r.cancels.rows), t('import.r.cancelsSub', { a: r.cancels.auto + r.cancels.manual, b: r.cancels.ambiguous, c: r.cancels.none })) : null,
           stat('res-issues', t('import.r.issues'), F.num(r.issues.length))),
         h('div', { class: 'row' },
           h('a', { class: 'btn btn-primary', href: '#panel', id: 'go-dashboard' }, icon('layout-dashboard'), t('import.goDashboard')),
@@ -264,8 +266,10 @@
         h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
           h('thead', null, h('tr', null, [t('import.issueType'), t('import.colSheet'), t('import.row'), t('import.value'), t('common.customer')].map(function (x) { return h('th', null, x); }))),
           h('tbody', null, issues.slice(0, 300).map(function (i) {
-            return h('tr', null, h('td', null, UI.pill(t('import.issue.' + i.type), i.type === 'badId' || i.type === 'ambiguousName' ? 'warn' : 'plain')),
-              h('td', null, i.sheet), h('td', { class: 'num' }, i.row), h('td', { class: 'mono small' }, i.field ? Schema.label(i.field, lang()) + ': ' : '', i.value || ''), h('td', null, i.customer || ''));
+            var cx = i.cancelId && Store.cancellations.get(i.cancelId);
+            return h('tr', null, h('td', null, UI.pill(t('import.issue.' + i.type), i.type === 'badId' || i.type === 'ambiguousName' || cx ? 'warn' : 'plain')),
+              h('td', null, i.sheet), h('td', { class: 'num' }, i.row), h('td', { class: 'mono small' }, i.field ? Schema.label(i.field, lang()) + ': ' : '', i.value || ''),
+              h('td', null, cx ? h('a', { href: '#ay-' + cx.month }, F.month(cx.month) + ' · ' + t('cancel.sectionTitle')) : i.customer || ''));
           })))))) : null);
   }
 

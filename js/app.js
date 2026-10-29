@@ -50,7 +50,7 @@
   };
   App.openBalanceCount = function () {
     var n = 0;
-    Store.derived().policies.forEach(function (p) { if (window.Portfolio.outstanding(p) > 0) n++; });
+    Store.derived().policies.forEach(function (p) { if (Store.outstanding(p) > 0) n++; });
     return n;
   };
 

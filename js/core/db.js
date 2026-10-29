@@ -2,8 +2,8 @@
 (function (root) {
   'use strict';
   var DB_NAME = 'sigorta-portfoy';
-  var DB_VERSION = 1;
-  var STORES = ['customers', 'policies', 'tasks', 'activities', 'meta'];
+  var DB_VERSION = 2; // 2: cancellations (İptal rows)
+  var STORES = ['customers', 'policies', 'tasks', 'activities', 'cancellations', 'meta'];
   var KEY = { meta: 'key' };
 
   function keyOf(store) { return KEY[store] || 'id'; }
@@ -58,6 +58,7 @@
           if (!db.objectStoreNames.contains(s)) {
             var os = db.createObjectStore(s, { keyPath: keyOf(s) });
             if (s === 'policies') { os.createIndex('customerId', 'customerId'); os.createIndex('month', 'month'); }
+            if (s === 'cancellations') os.createIndex('month', 'month');
           }
         });
       };

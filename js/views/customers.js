@@ -247,7 +247,7 @@
   };
 
   // ------------------------------------------------------------------ customer 360
-  var ACT_ICON = { note: 'sticky-note', call: 'phone', meeting: 'users', whatsapp: 'message-circle', email: 'mail', policyAdded: 'file-text', policyUpdated: 'pencil', policyDeleted: 'trash-2', payment: 'hand-coins', renewalStatus: 'refresh-cw', customerAdded: 'user-plus', taskDone: 'circle-check', merged: 'git-merge' };
+  var ACT_ICON = { note: 'sticky-note', call: 'phone', meeting: 'users', whatsapp: 'message-circle', email: 'mail', policyAdded: 'file-text', policyUpdated: 'pencil', policyDeleted: 'trash-2', payment: 'hand-coins', renewalStatus: 'refresh-cw', customerAdded: 'user-plus', taskDone: 'circle-check', merged: 'git-merge', policyCancelled: 'ban' };
   var NOTE_KINDS = ['note', 'call', 'meeting', 'whatsapp', 'email'];
 
   function policyDetail(p, c) {
@@ -275,6 +275,12 @@
     add(t('field.cash'), p.cash ? F.money(p.cash) : null);
     add(t('field.agent'), p.agent);
     add(t('renewals.status'), info ? App.statePill(info, p) : null);
+    var cx = Store.cancelOf(p.id);
+    if (cx) {
+      add(t('state.cancelled'), h('span', null, t('cancel.detail', { m: F.month(cx.month), v: App.refundText(cx) }),
+        cx.source && cx.source.type === 'import' ? h('span', { class: 'small muted' }, ' · ' + t('cancel.fromRow', { sheet: cx.source.sheet, row: cx.source.row })) : null));
+      if (cx.note) add(t('common.notes'), cx.note);
+    }
     if (p.renewal && p.renewal.note) add(t('renewals.note'), p.renewal.note);
     if (p.extras) Object.keys(p.extras).forEach(function (k) { add(k, p.extras[k]); });
     add(t('field.note'), p.note);
@@ -284,14 +290,28 @@
       : t('customer.sourceManual', { date: F.dateTime(p.createdAt) }));
     return h('div', { class: 'policy-detail' }, items,
       h('div', { style: { gridColumn: '1 / -1' }, class: 'row' },
-        h('button', { type: 'button', class: 'btn btn-sm', onClick: function () { App.movePolicyDialog(p); } }, icon('arrow-right'), t('customer.moveTo'))));
+        h('button', { type: 'button', class: 'btn btn-sm', onClick: function () { App.movePolicyDialog(p); } }, icon('arrow-right'), t('customer.moveTo')),
+        cx ? h('a', { class: 'btn btn-sm', href: '#ay-' + cx.month }, icon('calendar-days'), F.month(cx.month) + ' · ' + t('cancel.sectionTitle')) : null,
+        cx ? h('button', { type: 'button', class: 'btn btn-sm', id: 'uncancel-' + p.id, onClick: function () { App.removeCancel(cx); } }, icon('undo-2'), t('cancel.undo')) : null));
   }
+
+  /** Undo a cancellation: a row typed in the app goes away; a row of the Excel İptal block stays but no longer points here. */
+  App.removeCancel = function (cx) {
+    if (cx.source && cx.source.type === 'import') {
+      Store.linkCancellation(cx.id, null);
+      UI.toast(t('cancel.removed'), { action: { label: t('common.undo'), fn: function () { Store.linkCancellation(cx.id, cx.policyId); } } });
+      return;
+    }
+    var undo = Store.deleteCancellation(cx.id);
+    UI.toast(t('cancel.removed'), { action: { label: t('common.undo'), fn: undo } });
+  };
 
   App.policyActions = function (p, opts) {
     opts = opts || {};
     return h('div', { class: 'row tight', style: { flexWrap: 'nowrap' } },
       h('a', { class: 'icon-btn sm', href: '#duzenle-' + p.id, title: t('common.edit'), 'aria-label': t('common.edit') }, icon('pencil')),
       p.endDate ? h('a', { class: 'icon-btn sm', href: '#yenile-' + p.id, title: t('renewals.renew'), 'aria-label': t('renewals.renew') }, icon('refresh-cw')) : null,
+      !Store.isCancelled(p.id) ? h('button', { type: 'button', class: 'icon-btn sm', id: 'cancel-' + p.id, title: t('cancel.action'), 'aria-label': t('cancel.action'), onClick: function () { App.cancelDialog(p); } }, icon('ban')) : null,
       h('button', { type: 'button', class: 'icon-btn sm', title: t('common.delete'), 'aria-label': t('common.delete'), onClick: function () { App.deletePolicy(p); } }, icon('trash-2')));
   };
 
@@ -330,7 +350,7 @@
   function policyRow(p, c, vs) {
     var info = Store.derived().renewal.get(p.id);
     var open = vs.expanded[p.id];
-    var row = h('div', { class: 'policy-row', id: 'pol-' + p.id },
+    var row = h('div', { class: 'policy-row' + (Store.isCancelled(p.id) ? ' is-cancelled' : ''), id: 'pol-' + p.id },
       h('div', { class: 'policy-main' },
         h('div', { class: 't' }, h('button', { type: 'button', class: 'icon-btn sm', 'aria-expanded': String(!!open), title: t('common.details'), 'aria-label': t('common.details'),
           onClick: function () { vs.expanded[p.id] = !vs.expanded[p.id]; App.refresh(); } }, icon(open ? 'chevron-up' : 'chevron-down')),
@@ -357,7 +377,8 @@
       h('table', { class: 'data' },
         h('thead', null, h('tr', null, [t('common.month'), t('field.policyType'), t('field.company'), t('field.policyNo'), t('field.plate'), t('field.endDate'), t('field.premium'), t('field.commission')].map(function (x, i) { return h('th', { class: i >= 6 ? 'r' : null }, x); }))),
         h('tbody', null, list.slice().sort(function (a, b) { return U.cmp(a.month, b.month); }).map(function (p) {
-          return h('tr', null, h('td', null, F.month(p.month)), h('td', null, p.policyType || ''), h('td', null, Store.companyLabel(p.company)), h('td', null, p.policyNo || ''), h('td', null, p.plate || ''), h('td', null, F.date(p.endDate)), h('td', { class: 'r' }, F.money(p.premium)), h('td', { class: 'r' }, F.money(p.commission)));
+          var cx = Store.cancelOf(p.id);
+          return h('tr', null, h('td', null, F.month(p.month)), h('td', null, (p.policyType || '') + (cx ? ' (' + t('cancel.monthOf', { m: F.month(cx.month, true) }) + ')' : '')), h('td', null, Store.companyLabel(p.company)), h('td', null, p.policyNo || ''), h('td', null, p.plate || ''), h('td', null, F.date(p.endDate)), h('td', { class: 'r' }, F.money(p.premium)), h('td', { class: 'r' }, F.money(p.commission)));
         })),
         h('tfoot', null, h('tr', null, h('td', { colspan: 6 }, t('common.total') + ' · ' + t('customer.policyCount', { n: tot.count })), h('td', { class: 'r' }, F.money(tot.premium)), h('td', { class: 'r' }, F.money(tot.commission))))));
   }
@@ -418,7 +439,8 @@
             c.notes ? h('p', { class: 'small dim', style: { marginTop: '10px', whiteSpace: 'pre-line' } }, c.notes) : null),
           actions),
         h('div', { class: 'stats-strip' },
-          h('div', null, h('div', { class: 'k' }, t('customer.statPolicies')), h('div', { class: 'v', id: 'stat-policies' }, F.num(s.count))),
+          h('div', null, h('div', { class: 'k' }, t('customer.statPolicies')), h('div', { class: 'v' }, h('span', { id: 'stat-policies' }, F.num(s.count)),
+            s.cancelled ? h('span', { class: 'small', id: 'stat-cancelled', style: { fontWeight: 400, marginLeft: '6px', color: 'var(--bad-ink)' } }, t('cancel.monthChip', { n: s.cancelled })) : null)),
           h('div', null, h('div', { class: 'k' }, t('customer.statPremium')), h('div', { class: 'v', id: 'stat-premium' }, F.money(s.premium))),
           h('div', null, h('div', { class: 'k' }, t('customer.statCommission')), h('div', { class: 'v' }, F.money(s.commission))),
           h('div', null, h('div', { class: 'k' }, t('customer.statActive')), h('div', { class: 'v' }, F.num(s.active))),
@@ -486,7 +508,7 @@
           })) : h('p', { class: 'muted' }, t('customer.noNotes')));
       } else if (vs.tab === 'payments') {
         panel = withAccount.length ? h('div', { class: 'list' }, withAccount.map(function (p) {
-          var rem = Portfolio.outstanding(p);
+          var rem = Store.outstanding(p);
           return h('div', { class: 'list-item', style: { alignItems: 'flex-start' } },
             h('div', { class: 'main' }, h('div', { class: 't' }, p.policyType + ' · ' + F.month(p.month)),
               h('div', { class: 's' }, t('collections.dueLine', { due: F.money(p.account), paid: F.money(Portfolio.paidOnAccount(p)) })),
@@ -496,14 +518,24 @@
         })) : UI.empty({ icon: 'wallet', title: t('customer.noAccount'), text: t('customer.noAccountText') });
       } else {
         var byMonth = U.groupBy(list, function (p) { return p.month; });
-        var keys = Array.from(byMonth.keys()).sort().reverse();
+        var cancelsByMonth = U.groupBy(list.map(function (p) { return Store.cancelOf(p.id); }).filter(Boolean), function (x) { return x.month; });
+        var keys = Array.from(new Set(Array.from(byMonth.keys()).concat(Array.from(cancelsByMonth.keys())))).sort().reverse();
         panel = list.length ? h('div', { id: 'customer-months' }, keys.map(function (k) {
-          var ps = byMonth.get(k);
+          var ps = byMonth.get(k) || [];
+          var xs = cancelsByMonth.get(k) || [];
           return h('div', { class: 'month-block', id: 'cm-' + k },
             h('div', { class: 'month-head' }, icon('calendar-days'), h('h3', null, h('a', { href: '#ay-' + k, style: { color: 'inherit' } }, F.month(k))),
-              h('span', { class: 'chip' }, t('customer.policyCount', { n: ps.length })),
-              h('span', { class: 'sum' }, F.money(U.sum(ps, function (p) { return p.premium; })) + ' · ' + t('customer.commShort', { v: F.money(U.sum(ps, function (p) { return p.commission; })) }))),
-            ps.map(function (p) { return policyRow(p, c, vs); }));
+              ps.length ? h('span', { class: 'chip' }, t('customer.policyCount', { n: ps.length })) : null,
+              xs.length ? UI.pill(t('cancel.monthChip', { n: xs.length }), 'cancel') : null,
+              ps.length ? h('span', { class: 'sum' }, F.money(U.sum(ps, function (p) { return p.premium; })) + ' · ' + t('customer.commShort', { v: F.money(U.sum(ps, function (p) { return p.commission; })) })) : null),
+            ps.map(function (p) { return policyRow(p, c, vs); }),
+            xs.map(function (x) {
+              var p = Store.policies.get(x.policyId);
+              return h('div', { class: 'cancel-entry', id: 'ce-' + x.id }, icon('ban'),
+                h('span', null, h('strong', null, t('cancel.entry', { type: p.policyType || '—', month: F.month(p.month) })),
+                  h('span', { class: 'muted' }, ' · ' + [Store.companyLabel(p.company), p.policyNo].filter(Boolean).join(' · '))),
+                h('span', { class: 'amount' }, App.refundText(x)));
+            }));
         })) : UI.empty({ icon: 'file-text', title: t('customer.noPolicies'), actions: [h('a', { class: 'btn btn-primary', href: '#yeni-' + c.id }, icon('plus'), t('customer.addPolicy'))] });
       }
 

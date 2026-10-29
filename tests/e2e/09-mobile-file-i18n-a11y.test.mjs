@@ -200,7 +200,7 @@ test('English: every page is translated, no text keys leak into the screen', asy
     }
     await go(page, 'panel');
     assert.equal(await text(page, '#page-title'), 'Dashboard');
-    assert.match(await text(page, '#kpi-premium .kpi-value'), /^₺12\.9m$/, 'British compact notation');
+    assert.match(await text(page, '#kpi-premium .kpi-value'), /^₺\d+(\.\d)?m$/, 'British compact notation');
     await go(page, 'musteri-' + showId);
     for (const tab of ['vehicles', 'opps', 'notes', 'payments']) {
       await page.click('#tab-' + tab);

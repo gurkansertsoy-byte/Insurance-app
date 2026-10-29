@@ -11,7 +11,7 @@
     if (p.card) out.push(h('span', { class: 'chip', title: t('field.card') + ': ' + F.money(p.card) }, t('pay.short.card')));
     if (p.cash) out.push(h('span', { class: 'chip', title: t('field.cash') + ': ' + F.money(p.cash) }, t('pay.short.cash')));
     if (p.account) {
-      var rem = Portfolio.outstanding(p);
+      var rem = Store.outstanding(p);
       out.push(h('span', { class: 'chip', title: t('field.account') + ': ' + F.money(p.account) + (rem > 0 ? ' · ' + t('collections.remaining') + ' ' + F.money(rem) : ''), style: rem > 0 ? { background: 'var(--warn-soft)', color: 'var(--text)' } : null }, t('pay.short.account')));
     }
     return out.length ? h('span', { class: 'chips', style: { flexWrap: 'nowrap' } }, out) : h('span', { class: 'muted' }, '—');
@@ -104,6 +104,7 @@
         sortKey: vs.sortKey, sortDir: vs.sortDir, pageSize: Number(Store.settings.pageSize) || 50,
         onSort: function (k, dir) { vs.sortKey = k; vs.sortDir = dir; },
         columns: policyColumns(vs),
+        rowClass: function (p) { return Store.isCancelled(p.id) ? 'row-cancelled' : ''; },
         onRowClick: function (p) { App.go('musteri-' + p.customerId); },
         footer: function (rows) { return totalsFooter(rows); },
         empty: UI.empty({ icon: 'search', title: t('policies.noMatch'), text: t('customers.noMatchText') })
@@ -126,7 +127,7 @@
         UI.select('policies-cat', App.categoryOptions(), vs.cat, { onChange: function (e) { vs.cat = e.target.value; apply(); }, 'aria-label': t('report.category') }),
         UI.select('policies-nb', [{ value: '', label: t('policies.nbAll') }, { value: 'new', label: t('common.newBusiness') }, { value: 'renewal', label: t('common.renewal') }, { value: 'unknown', label: t('form.unspecified') }], vs.nb, { onChange: function (e) { vs.nb = e.target.value; apply(); }, 'aria-label': t('field.newBusiness') }),
         UI.select('policies-pay', [{ value: '', label: t('policies.payAll') }, { value: 'card', label: t('field.card') }, { value: 'cash', label: t('field.cash') }, { value: 'account', label: t('field.account') }], vs.pay, { onChange: function (e) { vs.pay = e.target.value; apply(); }, 'aria-label': t('policies.payment') }),
-        UI.select('policies-state', [{ value: '', label: t('policies.stateAll') }, { value: 'active', label: t('state.active') }, { value: 'due', label: t('state.due') }, { value: 'expired', label: t('state.expired') }, { value: 'renewed', label: t('state.renewed') }, { value: 'lost', label: t('state.lost') }], vs.state, { onChange: function (e) { vs.state = e.target.value; apply(); }, 'aria-label': t('renewals.status') }),
+        UI.select('policies-state', [{ value: '', label: t('policies.stateAll') }, { value: 'active', label: t('state.active') }, { value: 'due', label: t('state.due') }, { value: 'expired', label: t('state.expired') }, { value: 'renewed', label: t('state.renewed') }, { value: 'lost', label: t('state.lost') }, { value: 'cancelled', label: t('state.cancelled') }], vs.state, { onChange: function (e) { vs.state = e.target.value; apply(); }, 'aria-label': t('renewals.status') }),
         h('button', { type: 'button', class: 'btn btn-sm btn-ghost', onClick: function () { App.viewState.policies = { sortKey: vs.sortKey, sortDir: vs.sortDir }; App.refresh(); } }, icon('filter-x'), t('common.clearFilters')),
         h('span', { class: 'spacer' }), count,
         h('button', { type: 'button', class: 'btn btn-sm', id: 'policies-export', onClick: function () { App.exportPolicyList(current, 'police-listesi'); } }, icon('file-down'), t('common.exportExcel')));
@@ -147,7 +148,9 @@
       }
       var rows = Portfolio.aggregate(d.policies, function (p) { return p.month; }, true);
       var byKey = new Map(rows.map(function (r) { return [r.key, r]; }));
-      var max = Math.max.apply(null, rows.map(function (r) { return r.premium; }));
+      // a month can hold only cancellations
+      d.months.forEach(function (m) { if (!byKey.has(m)) byKey.set(m, { key: m, count: 0, premium: 0, commission: 0, newCount: 0 }); });
+      var max = Math.max.apply(null, rows.map(function (r) { return r.premium; }).concat([0]));
       var years = U.groupBy(d.months.slice().reverse(), function (m) { return m.slice(0, 4); });
       var blocks = [];
       years.forEach(function (ms, y) {
@@ -159,6 +162,7 @@
           var prev = byKey.get(U.addMonthsToKey(m, -1));
           var delta = prev && prev.premium ? (r.premium - prev.premium) / prev.premium : null;
           var meta = Store.months[m];
+          var xs = Store.cancellationsOf(m);
           return h('a', { class: 'card month-card', href: '#ay-' + m, id: 'month-' + m },
             h('div', { class: 'm' }, icon('calendar-days'), F.month(m),
               delta != null ? h('span', { class: delta >= 0 ? 'delta-up small' : 'delta-down small', style: { marginLeft: 'auto' }, title: t('months.vsPrev') }, (delta >= 0 ? '▲ ' : '▼ ') + F.pct(Math.abs(delta), 0)) : null),
@@ -168,6 +172,7 @@
               h('div', null, h('div', { class: 'k' }, t('field.newBusiness')), h('div', { class: 'v' }, F.num(r.newCount))),
               h('div', null, h('div', { class: 'k' }, t('dash.metric.premium')), h('div', { class: 'v', title: F.money(r.premium) }, F.moneyC(r.premium))),
               h('div', null, h('div', { class: 'k' }, t('dash.metric.commission')), h('div', { class: 'v', title: F.money(r.commission) }, F.moneyC(r.commission)))),
+            xs.length ? h('div', { class: 'small month-cancels', style: { color: 'var(--bad-ink)' } }, icon('ban'), ' ', t('cancel.summary', { n: xs.length, v: F.moneyC(U.sum(xs, Portfolio.refundOf)) })) : null,
             h('div', { class: 'src' }, meta && meta.file ? t('months.fromFile', { sheet: meta.sheet, file: meta.file }) : t('months.manual')));
         })));
       });
@@ -189,8 +194,11 @@
         idx > 0 ? h('a', { class: 'btn btn-sm', href: '#ay-' + d.months[idx - 1], id: 'month-prev' }, icon('chevron-left'), F.month(d.months[idx - 1], true)) : null,
         idx >= 0 && idx < d.months.length - 1 ? h('a', { class: 'btn btn-sm', href: '#ay-' + d.months[idx + 1], id: 'month-next' }, F.month(d.months[idx + 1], true), icon('chevron-right')) : null);
       if (!list.length) {
-        return h('div', { class: 'stack' }, nav, h('section', { class: 'card' }, UI.empty({ icon: 'calendar-days', title: t('months.noPolicies'),
-          actions: [h('a', { class: 'btn btn-primary', href: '#yeni-ay-' + r.key }, icon('plus'), t('months.addHere'))] })));
+        return h('div', { class: 'stack' }, nav,
+          Store.cancellationsOf(r.key).length ? h('div', { class: 'callout' }, icon('info'), h('span', null, t('cancel.onlyCancels'))) : null,
+          h('section', { class: 'card' }, UI.empty({ icon: 'calendar-days', title: t('months.noPolicies'),
+            actions: [h('a', { class: 'btn btn-primary', href: '#yeni-ay-' + r.key }, icon('plus'), t('months.addHere'))] })),
+          App.cancelSection(r.key));
       }
       var tot = Portfolio.totals(list);
       var prev = d.policies.filter(function (p) { return p.month === U.addMonthsToKey(r.key, -1); });
@@ -232,6 +240,7 @@
       sheetCols.push({ key: 'actions', label: '', cls: 'actions-cell', render: function (p) { return App.policyActions(p); } });
       var table = new UI.TableView({
         columns: sheetCols, className: 'sheet', responsive: false, sortKey: vs.sortKey, sortDir: vs.sortDir,
+        rowClass: function (p) { return Store.isCancelled(p.id) ? 'row-cancelled' : ''; },
         onSort: function (k, dir) { vs.sortKey = k; vs.sortDir = dir; },
         rows: [], empty: UI.empty({ icon: 'search', title: t('policies.noMatch') })
       });
@@ -262,8 +271,11 @@
         }, table: function () {
           return Charts.miniTable([{ label: t('field.company'), value: function (x) { return x.key === '—' ? t('common.unknown') : (d.companyNames.get(x.key) || x.key); } }, { label: t('dash.metric.count'), align: 'r', value: function (x) { return F.num(x.count); } }, { label: t('dash.metric.premium'), align: 'r', value: function (x) { return F.money(x.premium); } }], comps);
         } }));
+      var xs = Store.cancellationsOf(r.key);
       var actions = h('div', { class: 'toolbar' },
         h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'month-q', value: vs.q, placeholder: t('months.searchPh'), 'aria-label': t('months.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) })),
+        xs.length ? h('button', { type: 'button', class: 'btn btn-sm', id: 'month-cancels-link', onClick: function () { var el = document.getElementById('month-cancels'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } },
+          icon('ban'), t('cancel.monthChip', { n: xs.length })) : null,
         h('a', { class: 'btn btn-sm btn-primary', href: '#yeni-ay-' + r.key, id: 'month-add' }, icon('plus'), t('months.addHere')),
         h('button', { type: 'button', class: 'btn btn-sm', id: 'month-export', onClick: function () { App.exportMonths([r.key]); } }, icon('file-down'), t('months.export')),
         h('button', { type: 'button', class: 'btn btn-sm btn-danger', id: 'month-delete', onClick: function () {
@@ -281,6 +293,7 @@
         h('section', { class: 'card', style: { overflow: 'hidden' } },
           h('div', { class: 'card-head' }, h('h2', null, t('months.sheetTitle')), h('span', { class: 'sub' }, t('months.sheetSub', { n: cols.length }))),
           h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, table.el)),
+        App.cancelSection(r.key),
         breakdown);
     }
   };

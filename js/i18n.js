@@ -53,7 +53,7 @@
 
     'search.placeholder': 'Müşteri, TC, telefon, plaka veya poliçe no ara',
     'search.customers': 'Müşteriler', 'search.policies': 'Poliçeler', 'search.noResults': '"{q}" için sonuç yok',
-    'search.policyCount': '{n} poliçe', 'search.showAll': 'Müşteri listesinde tüm sonuçları göster',
+    'search.policyCount': '{n} poliçe', 'search.results': 'Arama sonuçları', 'search.showAll': 'Müşteri listesinde tüm sonuçları göster',
 
     'period.label': 'Dönem', 'period.all': 'Tüm dönemler', 'period.last': 'Son {n} ay',
     'days.left': '{n} gün kaldı', 'days.ago': '{n} gün geçti', 'days.today': 'Bugün bitiyor',
@@ -330,7 +330,34 @@
     'settings.aboutText': 'Sigorta Portföy, sigorta acenteleri için tek dosyalık bir portföy defteridir: aylık üretim Excel\'ini okur, müşterileri aylar arasında eşleştirir, yenileme ve tahsilatı takip eder.',
     'settings.privacy': 'Verileriniz hiçbir sunucuya gönderilmez. Tüm işlemler bu tarayıcıda yapılır. Düzenli yedek almayı unutmayın.',
     'settings.libs': 'Kullanılan açık kaynak bileşenler: SheetJS Community Edition 0.20.3 (Apache 2.0), IBM Plex yazı tipleri (SIL OFL 1.1), Lucide simgeleri (ISC).',
-    'settings.shortcuts': 'Kısayollar: Ctrl + K veya / arama · Ctrl + S formu kaydet · Esc pencereyi kapat'
+    'settings.shortcuts': 'Kısayollar: Ctrl + K veya / arama · Ctrl + S formu kaydet · Esc pencereyi kapat',
+    // İptal (cancellations)
+    'state.cancelled': 'İptal edildi', 'state.cancelledIn': 'İptal · {m}',
+    'cancel.action': 'İptal et', 'cancel.title': 'Poliçeyi iptal et',
+    'cancel.intro': '{type} · {name} · {month} poliçesi iptal edilir. Satır, seçtiğiniz ayın sayfasının sonundaki İPTAL bölümüne yazılır.',
+    'cancel.month': 'İptal ayı', 'cancel.monthHint': 'Hangi ayın İPTAL bölümüne yazılacak',
+    'cancel.refund': 'İade', 'cancel.refundHint': 'Müşteriye iade edilen tutar, ödeme türüne göre. Cari iade, cari bakiyeden düşer.', 'cancel.fullRefund': 'Tamamı ({v})',
+    'cancel.save': 'İptal et', 'cancel.errMonth': 'İptal ayı, poliçenin ayı olan {m} veya sonrası olmalı', 'cancel.done': 'Poliçe iptal edildi', 'cancel.undo': 'İptali kaldır', 'cancel.removed': 'İptal kaldırıldı',
+    'cancel.detail': '{m} sayfasında iptal edildi · iade {v}', 'cancel.fromRow': '{sheet} sayfası, {row}. satır', 'cancel.noRefund': 'iade yok',
+    'cancel.sectionTitle': 'İptaller', 'cancel.sectionSub': 'Bu ayın sayfasının sonundaki İPTAL bölümü', 'cancel.add': 'İptal satırı ekle',
+    'cancel.empty': 'Bu ay iptal yok', 'cancel.emptyText': 'Excel sayfasının İPTAL bölümüne yazılan satırlar burada görünür ve iptal edilen poliçe bulunur.',
+    'cancel.colMatch': 'İptal edilen poliçe', 'cancel.colStatus': 'Eşleşme',
+    'cancel.m.auto': 'Otomatik bulundu', 'cancel.m.manual': 'Elle seçildi', 'cancel.m.none': 'Poliçe bulunamadı', 'cancel.m.ambiguous': '{n} olası poliçe', 'cancel.m.notInFile': 'Dosyada yok',
+    'cancel.pick': 'Poliçeyi seç', 'cancel.change': 'Değiştir', 'cancel.pickTitle': 'İptal edilen poliçe',
+    'cancel.pickIntro': '{month} sayfasındaki iptal satırı: {line}. Hangi poliçenin iptal edildiğini seçin.',
+    'cancel.candidates': 'Uyan poliçeler', 'cancel.searchOther': 'Başka bir poliçe ara (müşteri adı, plaka, poliçe no)', 'cancel.noCandidates': 'Bu bilgilere uyan poliçe yok.',
+    'cancel.notInFile': 'Poliçe bu dosyada değil', 'cancel.autoFind': 'Uygulama bulsun', 'cancel.taken': 'zaten iptal',
+    'cancel.deleteTitle': 'İptal satırını sil', 'cancel.deleteMsg': 'Satır İPTAL bölümünden silinir; poliçe yeniden geçerli sayılır.', 'cancel.deleted': 'İptal satırı silindi',
+    'cancel.editTitle': 'İptal satırı', 'cancel.saved': 'İptal satırı kaydedildi', 'cancel.errInsured': 'Sigortalı adı soyadı gerekli',
+    'cancel.summary': '{n} iptal · {v} iade', 'cancel.monthChip': '{n} iptal', 'cancel.onlyCancels': 'Bu ayda yeni poliçe yok; yalnızca iptaller var.',
+    'cancel.refundTotal': 'İade toplamı', 'cancel.h.company': 'Şirket', 'cancel.h.policy': 'Poliçe', 'cancel.h.insured': 'Sigortalı ad soyad',
+    'cancel.entry': 'İptal: {type} ({month} poliçesi)', 'cancel.credit': 'İptal iadesi {v} cariden düşüldü', 'cancel.monthOf': '{m} iptali',
+    'import.cancelBlock': 'İptal bölümü {col} sütununda · {n} satır', 'import.r.cancels': 'İptal satırı',
+    'import.r.cancelsSub': '{a} eşleşti · {b} seçim bekliyor · {c} bulunamadı',
+    'import.issue.cancelNone': 'İptal: poliçe bulunamadı', 'import.issue.cancelAmbiguous': 'İptal: birden fazla poliçe', 'import.w.noMainHeader': 'Yalnızca İptal bölümü',
+    'activity.policyCancelled': 'Poliçe iptal edildi',
+    'dash.cancelSub': '{n} iptal', 'reports.cancelTitle': 'İptaller', 'reports.cancelSub': 'Aylara göre iptal ve iade',
+    'reports.colCancels': 'İptal', 'reports.colRefund': 'İade', 'reports.colNetProd': 'Üretim − iade'
   };
 
   var en = {
@@ -369,7 +396,7 @@
 
     'search.placeholder': 'Search customer, ID, phone, plate or policy no',
     'search.customers': 'Customers', 'search.policies': 'Policies', 'search.noResults': 'No results for "{q}"',
-    'search.policyCount': '{n} {n|policy|policies}', 'search.showAll': 'Show all results in the customer list',
+    'search.policyCount': '{n} {n|policy|policies}', 'search.results': 'Search results', 'search.showAll': 'Show all results in the customer list',
 
     'period.label': 'Period', 'period.all': 'All periods', 'period.last': 'Last {n} months',
     'days.left': '{n} {n|day|days} left', 'days.ago': '{n} {n|day|days} ago', 'days.today': 'Ends today',
@@ -643,7 +670,34 @@
     'settings.aboutText': 'Sigorta Portföy is a one-file portfolio ledger for insurance agencies: it reads the monthly production Excel, matches customers across months and tracks renewals and collections.',
     'settings.privacy': 'Your data is never sent to a server. Everything runs in this browser. Remember to make regular backups.',
     'settings.libs': 'Open-source components: SheetJS Community Edition 0.20.3 (Apache 2.0), IBM Plex typefaces (SIL OFL 1.1), Lucide icons (ISC).',
-    'settings.shortcuts': 'Shortcuts: Ctrl + K or / to search · Ctrl + S to save a form · Esc to close a dialog'
+    'settings.shortcuts': 'Shortcuts: Ctrl + K or / to search · Ctrl + S to save a form · Esc to close a dialog',
+    // İptal (cancellations)
+    'state.cancelled': 'Cancelled', 'state.cancelledIn': 'Cancelled · {m}',
+    'cancel.action': 'Cancel policy', 'cancel.title': 'Cancel the policy',
+    'cancel.intro': 'The {type} policy of {name} ({month}) is cancelled. The row goes into the İPTAL block at the end of the sheet of the month you choose.',
+    'cancel.month': 'Month of cancellation', 'cancel.monthHint': 'Which month\'s İPTAL block it goes into',
+    'cancel.refund': 'Refund', 'cancel.refundHint': 'Amount refunded to the customer, by payment type. A refund to Cari lowers the open balance.', 'cancel.fullRefund': 'In full ({v})',
+    'cancel.save': 'Cancel policy', 'cancel.errMonth': 'The month of cancellation must be {m} (the policy\'s month) or later', 'cancel.done': 'Policy cancelled', 'cancel.undo': 'Remove cancellation', 'cancel.removed': 'Cancellation removed',
+    'cancel.detail': 'Cancelled in the {m} sheet · refund {v}', 'cancel.fromRow': '{sheet} sheet, row {row}', 'cancel.noRefund': 'no refund',
+    'cancel.sectionTitle': 'Cancellations', 'cancel.sectionSub': 'The İPTAL block at the end of this month\'s sheet', 'cancel.add': 'Add cancellation row',
+    'cancel.empty': 'No cancellations this month', 'cancel.emptyText': 'Rows written in the İPTAL block of the Excel sheet appear here, and the cancelled policy is found.',
+    'cancel.colMatch': 'Cancelled policy', 'cancel.colStatus': 'Match',
+    'cancel.m.auto': 'Found automatically', 'cancel.m.manual': 'Chosen by hand', 'cancel.m.none': 'No policy found', 'cancel.m.ambiguous': '{n} possible policies', 'cancel.m.notInFile': 'Not in the file',
+    'cancel.pick': 'Pick the policy', 'cancel.change': 'Change', 'cancel.pickTitle': 'Cancelled policy',
+    'cancel.pickIntro': 'Cancellation row in the {month} sheet: {line}. Choose which policy was cancelled.',
+    'cancel.candidates': 'Matching policies', 'cancel.searchOther': 'Search another policy (customer name, plate, policy no)', 'cancel.noCandidates': 'No policy fits these details.',
+    'cancel.notInFile': 'The policy is not in this file', 'cancel.autoFind': 'Let the app find it', 'cancel.taken': 'already cancelled',
+    'cancel.deleteTitle': 'Delete the cancellation row', 'cancel.deleteMsg': 'The row is removed from the İPTAL block; the policy counts as running again.', 'cancel.deleted': 'Cancellation row deleted',
+    'cancel.editTitle': 'Cancellation row', 'cancel.saved': 'Cancellation row saved', 'cancel.errInsured': 'The insured person\'s name is required',
+    'cancel.summary': '{n} {n|cancellation|cancellations} · {v} refunded', 'cancel.monthChip': '{n} cancelled', 'cancel.onlyCancels': 'No new policies this month, only cancellations.',
+    'cancel.refundTotal': 'Total refunded', 'cancel.h.company': 'Insurer', 'cancel.h.policy': 'Policy', 'cancel.h.insured': 'Insured person',
+    'cancel.entry': 'Cancelled: {type} (policy of {month})', 'cancel.credit': 'Refund of {v} taken off the Cari balance', 'cancel.monthOf': 'cancelled in {m}',
+    'import.cancelBlock': 'İptal block in column {col} · {n} {n|row|rows}', 'import.r.cancels': 'Cancellation rows',
+    'import.r.cancelsSub': '{a} matched · {b} to choose · {c} not found',
+    'import.issue.cancelNone': 'Cancellation: no policy found', 'import.issue.cancelAmbiguous': 'Cancellation: several policies', 'import.w.noMainHeader': 'Only an İptal block',
+    'activity.policyCancelled': 'Policy cancelled',
+    'dash.cancelSub': '{n} cancelled', 'reports.cancelTitle': 'Cancellations', 'reports.cancelSub': 'Cancellations and refunds by month',
+    'reports.colCancels': 'Cancelled', 'reports.colRefund': 'Refunded', 'reports.colNetProd': 'Production − refunds'
   };
 
   var DICT = { tr: tr, en: en };

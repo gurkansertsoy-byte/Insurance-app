@@ -497,6 +497,15 @@ table.data.sheet td.wrap { white-space: normal; min-width: 160px; }
 .pill.bad { background: var(--bad-soft); } .pill.bad::before { background: var(--bad); }
 .pill.info { background: var(--info-soft); } .pill.info::before { background: var(--chart-1); }
 .pill.accent { background: var(--accent-soft); color: var(--accent-ink); } .pill.accent::before { background: var(--accent); }
+/* a cancelled policy: outlined, so it reads differently from an expired one */
+.pill.cancel { background: transparent; color: var(--bad-ink); box-shadow: inset 0 0 0 1px var(--bad); } .pill.cancel::before { background: var(--bad); border-radius: 1px; height: 2px; width: 9px; }
+.policy-row.is-cancelled .policy-main .t > span:first-of-type, .policy-row.is-cancelled .policy-money .p { text-decoration: line-through; text-decoration-color: var(--bad); }
+.policy-row.is-cancelled .policy-main, .policy-row.is-cancelled .policy-money, .policy-row.is-cancelled .policy-company { opacity: 0.75; }
+table.data tr.row-cancelled td { color: var(--text-3); }
+table.data tr.row-cancelled td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+.cancel-entry { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--border); background: var(--bad-soft); font-size: 13px; }
+.cancel-entry .svg-icon { color: var(--bad-ink); font-size: 16px; }
+.cancel-entry .amount { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; border: 1px solid transparent; }
 .chip.month { font-variant-numeric: tabular-nums; }
 .chip.outline { background: transparent; border-color: var(--border-strong); }
@@ -678,6 +687,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .progress { height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
 .progress span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
 .result-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.result-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .result-grid > div { padding: 12px 14px; border-radius: 9px; background: var(--surface-2); }
 .result-grid .k { font-size: 12px; color: var(--text-3); }
 .result-grid .v { font-size: 20px; font-weight: 600; }
@@ -735,7 +745,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
   .welcome-side { border-left: 0; border-top: 1px solid var(--border); }
   .search .kbd { display: none; }
   .search input { padding-right: 12px; }
-  .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-grid, .result-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .policy-detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 680px) {
@@ -755,7 +765,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
   .policy-row { grid-template-columns: minmax(0, 1fr) auto; }
   .policy-row .policy-company, .policy-row .policy-end { display: none; }
   .hbar { grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) auto; }
-  .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-grid, .result-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* tables become cards */
   table.data.responsive thead { display: none; }
   table.data.responsive, table.data.responsive tbody, table.data.responsive tfoot { display: block; }

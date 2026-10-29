@@ -370,12 +370,16 @@ test('export writes each month in its original column order and re-imports ident
   importInto(state, a, 'ornek-portfoy.xlsx');
   const monthsMeta = {};
   a.sheets.forEach(s => { monthsMeta[s.month.key] = { sheet: s.name, columns: s.columns.map(c => ({ header: c.header, field: c.role === 'custom' ? null : c.field })) }; });
-  const wb = Exporter.portfolioWorkbook({ XLSX, policies: Array.from(state.policies.values()), customers: state.customers, monthsMeta, lang: 'tr', withSummary: true, withCustomers: true });
+  const cancels = Importer.buildRecords(a, {}).cancels;
+  const wb = Exporter.portfolioWorkbook({ XLSX, policies: Array.from(state.policies.values()), customers: state.customers, monthsMeta, lang: 'tr', withSummary: true, withCustomers: true, cancels });
   assert.equal(wb.SheetNames.length, 15);
   assert.equal(wb.SheetNames[0], 'Özet');
   assert.equal(wb.SheetNames[14], 'Müşteriler');
   const mart = XLSX.utils.sheet_to_json(wb.Sheets['Mart 2026'], { header: 1 })[0];
-  assert.deepEqual(mart, a.sheets.find(s => s.name === 'MART').columns.map(c => c.header), 'same headers in the same order');
+  const martCols = a.sheets.find(s => s.name === 'MART').columns.map(c => c.header);
+  assert.deepEqual(mart.slice(0, martCols.length), martCols, 'same headers in the same order');
+  assert.equal(mart[martCols.length], undefined, 'one empty column');
+  assert.deepEqual(mart.slice(martCols.length + 1), Exporter.BLOCK_HEADERS, 'then the İptal block');
   const subat = wb.Sheets['Şubat 2026'];
   const subatHead = XLSX.utils.sheet_to_json(subat, { header: 1 })[0];
   assert.ok(subatHead.includes('MARKA') && subatHead.includes('MODEL YILI'), 'custom columns written back');
@@ -386,6 +390,8 @@ test('export writes each month in its original column order and re-imports ident
   importInto(state2, a2, 'export.xlsx');
   const t1 = P.totals(Array.from(state.policies.values())), t2 = P.totals(Array.from(state2.policies.values()));
   assert.deepEqual([t2.count, t2.premium, t2.commission, t2.newCount, state2.customers.size], [t1.count, t1.premium, t1.commission, t1.newCount, state.customers.size]);
+  const again = Importer.buildRecords(a2, {}).cancels;
+  assert.deepEqual(again.map(P.cancelKey).sort(), cancels.map(P.cancelKey).sort(), 'every İptal row comes back');
   const dateCell = Object.values(wb.Sheets['Ekim 2026']).find(c => c && c.z && XLSX.SSF.is_date(c.z));
   assert.ok(dateCell && dateCell.t === 'n', 'dates are real Excel dates');
   assert.equal(XLSX.SSF.format(dateCell.z, 46000), '09.12.2025', 'shown as dd.mm.yyyy');

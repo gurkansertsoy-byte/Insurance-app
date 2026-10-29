@@ -142,6 +142,72 @@
     });
   }
 
+  // ------------------------------------------------------------------ İptal block
+  // Every month sheet ends with a small table of cancellations, at whatever column the sheet ends:
+  //   ŞİRKET | POLİÇE | SİGORTALI AD SOYAD | KART | CARİ | NAKİT
+  // Its rows are policies of earlier months that were cancelled in this month, with the refund per payment type.
+  var CANCEL_PAY = ['card', 'account', 'cash'];
+
+  function cancelHeaderKind(text) {
+    var f = U.fold(text);
+    if (!f) return '';
+    if (f === 'sirket' || f === 'sirketi' || f === 'sirket adi' || f === 'sigorta sirketi') return 'company';
+    if (f === 'brans' || /^police( adi| no| nosu| numarasi| turu| tipi| cinsi)?$/.test(f)) return 'policy';
+    if (/^sigortali( ad soyad| adi soyadi| adi soyad| ad soyadi| adi| unvan| unvani)?$/.test(f)) return 'insured';
+    if (f === 'kart' || f === 'kredi karti' || f === 'k karti' || f === 'kk' || f === 'pos') return 'card';
+    if (f === 'cari' || f === 'cari hesap' || f === 'veresiye') return 'account';
+    if (f === 'nakit' || f === 'pesin' || f === 'elden') return 'cash';
+    return '';
+  }
+
+  /** { headerRow, startCol, colList, kinds, headers } or null. The block is the last thing on its header row. */
+  function findCancelBlock(rows) {
+    var limit = Math.min(rows.length, MAX_HEADER_SCAN + 10);
+    for (var r = 0; r < limit; r++) {
+      var row = rows[r] || [];
+      var texts = row.map(headerString);
+      var kinds = texts.map(cancelHeaderKind);
+      for (var c = kinds.length - 6; c >= 0; c--) {
+        if (kinds[c] !== 'company' || kinds[c + 1] !== 'policy' || kinds[c + 2] !== 'insured') continue;
+        if (kinds.slice(c + 3, c + 6).sort().join() !== 'account,card,cash') continue;
+        if (texts.slice(c + 6).some(Boolean)) continue;
+        var colList = [c, c + 1, c + 2, c + 3, c + 4, c + 5];
+        return { headerRow: r, startCol: c, colList: colList, kinds: kinds.slice(c, c + 6), headers: texts.slice(c, c + 6) };
+      }
+    }
+    return null;
+  }
+
+  function cancelRows(rows, block, res) {
+    var out = [];
+    for (var r = block.headerRow + 1; r < rows.length; r++) {
+      var row = rows[r] || [];
+      var cells = block.colList.map(function (c) { var v = row[c]; return v && v.merged ? null : v; });
+      if (cells.every(function (v) { return isEmpty(plain(v)); })) continue;
+      var again = cells.filter(function (v, i) { return typeof v === 'string' && cancelHeaderKind(v) === block.kinds[i]; }).length;
+      if (again >= 3) continue;
+      if (isTotalRow(cells)) { res.skipped.cancelTotals = (res.skipped.cancelTotals || 0) + 1; continue; }
+      out.push({ r: r, cells: cells });
+    }
+    return out;
+  }
+
+  /** "EVET" / "HAYIR", "X" / "" …: how this sheet writes Yeni iş, so new rows look the same. */
+  function yesNoWords(res) {
+    var col = res.columns.filter(function (c) { return c.field === 'newBusiness'; })[0];
+    if (!col) return null;
+    var yes = new Map(), no = new Map(), blank = 0;
+    res.rows.forEach(function (x) {
+      var v = plain(x.cells[col.col]);
+      if (isEmpty(v)) { blank++; return; }
+      var b = U.parseYesNo(v);
+      var m = b === true ? yes : b === false ? no : null;
+      if (m) m.set(String(v).trim(), (m.get(String(v).trim()) || 0) + 1);
+    });
+    function top(m) { var best = null, n = 0; m.forEach(function (k, v) { if (k > n) { best = v; n = k; } }); return best; }
+    return { yes: top(yes) || 'Evet', no: no.size ? top(no) : (blank ? '' : 'Hayır') };
+  }
+
   function mode(values) {
     var counts = new Map(), best = null, bestN = 0;
     values.forEach(function (v) {
@@ -157,18 +223,35 @@
    * Analyses one sheet: header row, column mapping, data rows and production month.
    * opts: { saved: {foldedHeader: fieldKey}, fileName, date1904, sheetIndex }
    */
-  function analyzeRows(rows, sheetName, opts) {
+  function analyzeRows(allRows, sheetName, opts) {
     opts = opts || {};
     var saved = opts.saved || {};
     var res = {
       name: sheetName, index: opts.sheetIndex || 0, headerRow: -1, dataStart: -1, columns: [], rows: [],
       skipped: { empty: 0, totals: 0, repeatedHeader: 0 }, month: { key: '', source: 'none' }, include: false,
-      titleText: '', warnings: []
+      titleText: '', warnings: [], cancelBlock: null, cancels: [], totalRow: -1, lastDataRow: -1
     };
+    // the İptal block is read on its own; the main table never sees its columns
+    var block = findCancelBlock(allRows);
+    var rows = allRows;
+    var blockRows = new Set();
+    if (block) {
+      res.cancelBlock = { headerRow: block.headerRow, startCol: block.startCol, kinds: block.kinds, headers: block.headers };
+      res.cancels = cancelRows(allRows, block, res);
+      res.cancels.forEach(function (x) { blockRows.add(x.r); });
+      var inBlock = {};
+      block.colList.forEach(function (c) { inBlock[c] = true; });
+      rows = allRows.map(function (row) {
+        if (!row || !row.length || row.length <= block.startCol) return row;
+        var out = row.map(function (v, c) { return inBlock[c] ? null : v; });
+        return out.some(function (v) { return !isEmpty(plain(v)); }) ? out : [];
+      });
+    }
     var hr = opts.headerRow != null ? opts.headerRow : findHeaderRow(rows, saved);
     if (hr < 0) {
-      res.warnings.push('noHeader');
+      res.warnings.push(block ? 'noMainHeader' : 'noHeader');
       res.month = detectMonth(sheetName, '', [], opts);
+      if (block && res.month.key) res.include = res.cancels.length > 0;
       return res;
     }
     res.headerRow = hr;
@@ -208,7 +291,7 @@
     for (var r = dataStart; r < rows.length; r++) {
       var row = rows[r] || [];
       var nonEmpty = row.filter(function (v) { return !isEmpty(plain(v)) && !(v && v.merged); });
-      if (!nonEmpty.length) { res.skipped.empty++; continue; }
+      if (!nonEmpty.length) { if (!blockRows.has(r)) res.skipped.empty++; continue; }
       var same = 0, compared = 0;
       row.forEach(function (v, i) {
         if (texts[i] && typeof v === 'string') { compared++; if (U.fold(v) === U.fold(texts[i])) same++; }
@@ -248,17 +331,20 @@
       var probe = buildRecord(x, res, opts);
       if (probe.fields.policyNo || probe.fields.tc || probe.fields.plate) return true;
       res.skipped.totals++;
+      res.totalRow = x.r;
       return false;
     });
+    res.rows.forEach(function (x) { if (x.r > res.lastDataRow) res.lastDataRow = x.r; });
+    res.yesNo = yesNoWords(res);
 
     res.month = detectMonth(sheetName, res.titleText, sampleDates(res, opts), opts);
-    res.include = res.rows.length > 0;
+    res.include = res.rows.length > 0 || res.cancels.length > 0;
     // summary or customer-list sheets have no policy columns: leave them out unless the user opts in
     var mapped = {};
     res.columns.forEach(function (col) { if (col.field) mapped[col.field] = true; });
     var policyCols = ['policyType', 'policyNo', 'endDate', 'company', 'plate'].some(function (f) { return mapped[f]; });
     var whoCols = ['name', 'insuredName', 'tc', 'policyNo', '_first'].some(function (f) { return mapped[f]; });
-    if (!policyCols || !whoCols) { res.include = false; res.warnings.push('notPolicySheet'); }
+    if ((!policyCols || !whoCols) && !block) { res.include = false; res.warnings.push('notPolicySheet'); }
     else if (!res.month.key) res.warnings.push('noMonth');
     return res;
   }
@@ -429,7 +515,34 @@
       var kind = U.idKind(fields.tc);
       if (kind === 'invalid') issues.push({ type: 'badId', field: 'tc', value: fields.tc });
     }
-    return { sheet: sheet.name, row: x.r + 1, month: sheet.month.key, fields: fields, extras: extras, issues: issues };
+    return { sheet: sheet.name, row: x.r + 1, month: sheet.month.key, fields: fields, extras: extras, issues: issues, cells: rawCells(x.cells) };
+  }
+
+  /** The row as it was in the file (JSON-safe), so an untouched row can be written back unchanged. */
+  function rawCells(cells) {
+    var out = [];
+    (cells || []).forEach(function (v, i) { out[i] = v == null || (v && v.merged) ? null : v; });
+    while (out.length && out[out.length - 1] == null) out.pop();
+    return out;
+  }
+
+  /** One İptal row: { sheet, row, month, company, policyText, insuredName, card, account, cash, cells, issues } */
+  function buildCancel(x, sheet, opts) {
+    opts = opts || {};
+    var rec = { sheet: sheet.name, row: x.r + 1, month: sheet.month.key, company: '', policyText: '', insuredName: '', card: null, account: null, cash: null, cells: rawCells(x.cells), issues: [] };
+    sheet.cancelBlock.kinds.forEach(function (k, i) {
+      var v = x.cells[i];
+      if (isEmpty(plain(v))) return;
+      if (k === 'company') rec.company = U.collapse(cellText(v));
+      else if (k === 'policy') rec.policyText = U.collapse(cellText(v));
+      else if (k === 'insured') rec.insuredName = opts.tidyNames === false ? U.collapse(cellText(v)) : U.tidyName(cellText(v));
+      else {
+        var n = U.parseNumber(plain(v));
+        if (n == null) rec.issues.push({ type: 'badNumber', field: k, value: cellText(v, opts.lang) });
+        else rec[k] = n;
+      }
+    });
+    return rec;
   }
 
   function hasSubstance(rec) {
@@ -437,11 +550,12 @@
     return !!(f.name || f.policyNo || f.tc || f.plate || f.policyType || f.premium);
   }
 
-  /** Builds import records for the included sheets. */
+  /** Builds import records (and İptal records) for the included sheets. */
   function buildRecords(analysis, opts) {
     opts = opts || {};
     var o = { date1904: analysis.date1904, tidyNames: opts.tidyNames !== false, lang: opts.lang };
     var records = [];
+    var cancels = [];
     var skipped = 0;
     analysis.sheets.forEach(function (sheet) {
       if (!sheet.include || !sheet.month.key) return;
@@ -450,13 +564,32 @@
         if (!hasSubstance(rec)) { skipped++; return; }
         records.push(rec);
       });
+      (sheet.cancels || []).forEach(function (x) {
+        var c = buildCancel(x, sheet, o);
+        if (!c.insuredName && !c.policyText && !c.company) { skipped++; return; }
+        cancels.push(c);
+      });
     });
-    return { records: records, skipped: skipped };
+    return { records: records, cancels: cancels, skipped: skipped };
+  }
+
+  /** What the workbook writer needs to put rows back where they belong. */
+  function layoutOf(sheet) {
+    return {
+      headerRow: sheet.headerRow, dataStart: sheet.dataStart, lastDataRow: sheet.lastDataRow, totalRow: sheet.totalRow,
+      columns: sheet.columns.map(function (c) { return { col: c.col, header: c.header, field: c.role === 'custom' || c.role === 'ignored' ? null : c.field, role: c.role }; }),
+      block: sheet.cancelBlock ? {
+        headerRow: sheet.cancelBlock.headerRow, startCol: sheet.cancelBlock.startCol, kinds: sheet.cancelBlock.kinds.slice(), headers: sheet.cancelBlock.headers.slice(),
+        lastRow: (sheet.cancels || []).reduce(function (m, x) { return Math.max(m, x.r); }, sheet.cancelBlock.headerRow)
+      } : null,
+      yesNo: sheet.yesNo || null
+    };
   }
 
   return {
     readWorkbook: readWorkbook, sheetRows: sheetRows, analyzeRows: analyzeRows, analyzeWorkbook: analyzeWorkbook,
-    reanalyze: reanalyze, buildRecords: buildRecords, buildRecord: buildRecord, detectMonth: detectMonth,
-    findHeaderRow: findHeaderRow, cellText: cellText, plain: plain, colLetter: colLetter
+    reanalyze: reanalyze, buildRecords: buildRecords, buildRecord: buildRecord, buildCancel: buildCancel, detectMonth: detectMonth,
+    findHeaderRow: findHeaderRow, findCancelBlock: findCancelBlock, cancelHeaderKind: cancelHeaderKind, layoutOf: layoutOf,
+    cellText: cellText, plain: plain, colLetter: colLetter, CANCEL_PAY: CANCEL_PAY
   };
 });

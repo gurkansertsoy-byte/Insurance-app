@@ -15,7 +15,7 @@ test('dashboard figures match the sample data', async () => {
   assert.match(await text(page, '#kpi-policies .kpi-sub'), new RegExp('Yeni iş ' + expected.newBusiness));
   assert.match(await text(page, '#kpi-customers .kpi-sub'), new RegExp(expected.multiMonthCustomers + ' müşteri birden fazla ayda'));
   const outstanding = await page.getAttribute('#kpi-outstanding .kpi-value', 'title');
-  assert.equal(outstanding, new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2 }).format(expected.totalAccount));
+  assert.equal(outstanding, new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY', currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2 }).format(expected.totalOutstanding));
   assert.equal(await page.$$eval('#card-due .list-item', els => els.length), 6, 'six nearest renewals listed');
 });
 

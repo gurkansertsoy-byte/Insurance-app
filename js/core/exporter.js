@@ -32,10 +32,10 @@
     }
   }
 
-  function makeSheet(XLSX, header, rows, types) {
+  function makeSheet(XLSX, header, rows, types, filterCols) {
     var ws = {};
     var widths = header.map(function (h) { return Math.max(8, String(h).length + 2); });
-    header.forEach(function (h, c) { ws[XLSX.utils.encode_cell({ r: 0, c: c })] = { t: 's', v: String(h) }; });
+    header.forEach(function (h, c) { if (h !== '') ws[XLSX.utils.encode_cell({ r: 0, c: c })] = { t: 's', v: String(h) }; });
     rows.forEach(function (row, r) {
       row.forEach(function (v, c) {
         var cell = toCell(v, types[c]);
@@ -47,7 +47,8 @@
     });
     ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, rows.length), c: Math.max(0, header.length - 1) } });
     ws['!cols'] = widths.map(function (w) { return { wch: w }; });
-    if (header.length) ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: header.length - 1 } }) };
+    var fc = filterCols || header.length;
+    if (fc) ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: fc - 1 } }) };
     return ws;
   }
 
@@ -117,7 +118,26 @@
     });
   }
 
-  function monthSheet(XLSX, policies, customers, meta) {
+  // the İptal block that closes every month sheet, in the agency's own order and wording
+  var BLOCK_KINDS = ['company', 'policy', 'insured', 'card', 'account', 'cash'];
+  var BLOCK_HEADERS = ['ŞİRKET', 'POLİÇE', 'SİGORTALI AD SOYAD', 'KART', 'CARİ', 'NAKİT'];
+  function blockLayout(meta) {
+    var b = meta && meta.layout && meta.layout.block;
+    return b && b.kinds && b.kinds.length === 6 ? { kinds: b.kinds, headers: b.headers } : { kinds: BLOCK_KINDS, headers: BLOCK_HEADERS };
+  }
+  function cancelValue(kind, x) {
+    switch (kind) {
+      case 'company': return x.company || '';
+      case 'policy': return x.policyText || '';
+      case 'insured': return x.insuredName || '';
+      default: return x[kind] || null;
+    }
+  }
+  function sortCancels(list) {
+    return list.slice().sort(function (a, b) { return (a.source && a.source.row || 1e9) - (b.source && b.source.row || 1e9) || (a.createdAt || 0) - (b.createdAt || 0); });
+  }
+
+  function monthSheet(XLSX, policies, customers, meta, cancels) {
     var cols = monthColumns(policies, customers, meta);
     var rows = sortForSheet(policies).map(function (p) {
       var c = customers.get(p.customerId);
@@ -126,7 +146,23 @@
         return valueFor(col.field, p, c);
       });
     });
-    return makeSheet(XLSX, cols.map(function (c) { return c.header; }), rows, cols.map(function (c) { return c.extra ? 'text' : typeOf(c.field); }));
+    var header = cols.map(function (c) { return c.header; });
+    var types = cols.map(function (c) { return c.extra ? 'text' : typeOf(c.field); });
+    // one empty column, then the İptal block
+    var bl = blockLayout(meta);
+    var xs = sortCancels(cancels || []);
+    var n = header.length;
+    header = header.concat([''], bl.headers);
+    types = types.concat(['text'], bl.kinds.map(function (k) { return k === 'card' || k === 'account' || k === 'cash' ? 'money' : 'text'; }));
+    for (var i = 0; i < Math.max(rows.length, xs.length); i++) {
+      var row = rows[i] || cols.map(function () { return null; });
+      row.push(null);
+      bl.kinds.forEach(function (k) { row.push(xs[i] ? cancelValue(k, xs[i]) : null); });
+      rows[i] = row;
+    }
+    var ws = makeSheet(XLSX, header, rows, types, n);
+    ws['!cols'][n] = { wch: 3 };
+    return ws;
   }
 
   function safeSheetName(name, used) {
@@ -137,7 +173,8 @@
     return n;
   }
 
-  function customersSheet(XLSX, customers, policies, lang) {
+  function customersSheet(XLSX, customers, policies, lang, outstandingFn) {
+    var owed = outstandingFn || function (p) { return Portfolio.outstanding(p); };
     var byC = U.groupBy(policies, function (p) { return p.customerId; });
     var header = lang === 'en'
       ? ['Full name', 'National ID', 'Phone', 'Other phones', 'Email', 'Occupation', 'Address', 'Date of birth', 'Policies', 'Months', 'Total premium', 'Total commission', 'Open balance', 'Notes']
@@ -151,39 +188,49 @@
       return [c.name, c.tc, c.phone ? U.formatPhone(c.phone) : '', others, c.email, c.profession, c.address, c.birthDate,
         ps.length, months.map(function (m) { return U.monthLabel(m, lang, true); }).join(', '),
         U.round2(U.sum(ps, function (p) { return p.premium; })), U.round2(U.sum(ps, function (p) { return p.commission; })),
-        U.round2(U.sum(ps, Portfolio.outstanding)) || '', c.notes];
+        U.round2(U.sum(ps, owed)) || '', c.notes];
     });
     return makeSheet(XLSX, header, rows, types);
   }
 
-  function summarySheet(XLSX, policies, lang) {
+  function summarySheet(XLSX, policies, lang, cancels) {
     var header = lang === 'en'
-      ? ['Month', 'Policies', 'New business', 'Premium', 'Commission', 'Commission %', 'Card', 'On account', 'Cash']
-      : ['Ay', 'Poliçe sayısı', 'Yeni iş', 'Prim', 'Komisyon', 'Komisyon %', 'Kart', 'Cari', 'Nakit'];
-    var rows = Portfolio.aggregate(policies, function (p) { return p.month; }, true).map(function (r) {
-      return [U.monthLabel(r.key, lang), r.count, r.newCount, r.premium, r.commission, r.premium ? r.commission / r.premium : '', r.card, r.account, r.cash];
+      ? ['Month', 'Policies', 'New business', 'Premium', 'Commission', 'Commission %', 'Card', 'On account', 'Cash', 'Cancelled', 'Refunded']
+      : ['Ay', 'Poliçe sayısı', 'Yeni iş', 'Prim', 'Komisyon', 'Komisyon %', 'Kart', 'Cari', 'Nakit', 'İptal', 'İade'];
+    var byMonth = U.groupBy(cancels || [], function (x) { return x.month; });
+    var agg = Portfolio.aggregate(policies, function (p) { return p.month; }, true);
+    var keys = new Set(agg.map(function (r) { return r.key; }));
+    byMonth.forEach(function (v, k) { if (!keys.has(k)) agg.push(Object.assign(Portfolio.totals([]), { key: k })); });
+    agg.sort(function (a, b) { return U.cmp(a.key, b.key); });
+    var rows = agg.map(function (r) {
+      var xs = byMonth.get(r.key) || [];
+      return [U.monthLabel(r.key, lang), r.count, r.newCount, r.premium, r.commission, r.premium ? r.commission / r.premium : '', r.card, r.account, r.cash, xs.length, U.round2(U.sum(xs, Portfolio.refundOf))];
     });
     var t = Portfolio.totals(policies);
-    rows.push([lang === 'en' ? 'Total' : 'Toplam', t.count, t.newCount, t.premium, t.commission, t.premium ? t.commission / t.premium : '', t.card, t.account, t.cash]);
-    return makeSheet(XLSX, header, rows, ['text', 'int', 'int', 'money', 'money', 'pct', 'money', 'money', 'money']);
+    var all = cancels || [];
+    rows.push([lang === 'en' ? 'Total' : 'Toplam', t.count, t.newCount, t.premium, t.commission, t.premium ? t.commission / t.premium : '', t.card, t.account, t.cash, all.length, U.round2(U.sum(all, Portfolio.refundOf))]);
+    return makeSheet(XLSX, header, rows, ['text', 'int', 'int', 'money', 'money', 'pct', 'money', 'money', 'money', 'int', 'money']);
   }
 
   /**
    * opts: { XLSX, policies (array), customers (Map), monthsMeta, lang, months (keys to include, optional),
-   *         withCustomers, withSummary }
+   *         cancels (İptal rows, array), outstanding (policy -> open balance), withCustomers, withSummary }
    */
   function portfolioWorkbook(opts) {
     var XLSX = opts.XLSX;
     var wb = XLSX.utils.book_new();
     var used = new Set();
     var byMonth = U.groupBy(opts.policies, function (p) { return p.month; });
-    var keys = (opts.months || Array.from(byMonth.keys())).filter(function (k) { return byMonth.has(k); }).sort();
-    if (opts.withSummary) XLSX.utils.book_append_sheet(wb, summarySheet(XLSX, opts.policies, opts.lang), safeSheetName(opts.lang === 'en' ? 'Summary' : 'Özet', used));
+    var cancels = (opts.cancels || []).filter(function (x) { return !opts.months || opts.months.indexOf(x.month) >= 0; });
+    var cancelsByMonth = U.groupBy(cancels, function (x) { return x.month; });
+    var all = new Set(Array.from(byMonth.keys()).concat(Array.from(cancelsByMonth.keys())));
+    var keys = (opts.months || Array.from(all)).filter(function (k) { return all.has(k); }).sort();
+    if (opts.withSummary) XLSX.utils.book_append_sheet(wb, summarySheet(XLSX, opts.policies, opts.lang, cancels), safeSheetName(opts.lang === 'en' ? 'Summary' : 'Özet', used));
     keys.forEach(function (k) {
-      var ws = monthSheet(XLSX, byMonth.get(k), opts.customers, opts.monthsMeta && opts.monthsMeta[k]);
+      var ws = monthSheet(XLSX, byMonth.get(k) || [], opts.customers, opts.monthsMeta && opts.monthsMeta[k], cancelsByMonth.get(k));
       XLSX.utils.book_append_sheet(wb, ws, safeSheetName(U.monthLabel(k, 'tr'), used));
     });
-    if (opts.withCustomers) XLSX.utils.book_append_sheet(wb, customersSheet(XLSX, opts.customers, opts.policies, opts.lang), safeSheetName(opts.lang === 'en' ? 'Customers' : 'Müşteriler', used));
+    if (opts.withCustomers) XLSX.utils.book_append_sheet(wb, customersSheet(XLSX, opts.customers, opts.policies, opts.lang, opts.outstanding), safeSheetName(opts.lang === 'en' ? 'Customers' : 'Müşteriler', used));
     if (!wb.SheetNames.length) XLSX.utils.book_append_sheet(wb, makeSheet(XLSX, ['—'], [], ['text']), 'Sayfa1');
     return wb;
   }
@@ -205,6 +252,7 @@
 
   return {
     portfolioWorkbook: portfolioWorkbook, monthSheet: monthSheet, monthColumns: monthColumns, customersSheet: customersSheet,
-    summarySheet: summarySheet, tableWorkbook: tableWorkbook, makeSheet: makeSheet, writeFile: writeFile, valueFor: valueFor
+    summarySheet: summarySheet, tableWorkbook: tableWorkbook, makeSheet: makeSheet, writeFile: writeFile, valueFor: valueFor,
+    BLOCK_KINDS: BLOCK_KINDS, BLOCK_HEADERS: BLOCK_HEADERS, blockLayout: blockLayout, cancelValue: cancelValue
   };
 });

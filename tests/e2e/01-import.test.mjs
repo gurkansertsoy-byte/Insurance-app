@@ -73,7 +73,7 @@ test('column mapping editor shows every column and remaps on change', async () =
   await page.waitForSelector('dialog[open]', { state: 'detached' });
 });
 
-test('import adds 703 policies and 320 customers and lists the 3 TC typos', async () => {
+test('import adds every policy and customer, lists the TC typos and the İptal rows it could not place', async () => {
   const { page } = env;
   await shot(page, 'e2e-import-preview', { fullPage: true });
   await page.click('#import-run');
@@ -82,8 +82,13 @@ test('import adds 703 policies and 320 customers and lists the 3 TC typos', asyn
   assert.equal(await n('#res-added'), expected.totalPolicies);
   assert.equal(await n('#res-customers'), expected.totalCustomers);
   assert.equal(await n('#res-updated'), 0);
-  assert.equal(await n('#res-issues'), expected.brokenTcRows);
-  assert.equal(await page.$$eval('#import-issues tbody tr', trs => trs.length), expected.brokenTcRows);
+  const cx = expected.cancellations;
+  assert.equal(await n('#res-cancels'), cx.total);
+  assert.match(await text(page, '#res-cancels'), new RegExp(`${cx.auto} eşleşti · ${cx.ambiguous} seçim bekliyor · ${cx.none} bulunamadı`));
+  assert.equal(await n('#res-issues'), expected.brokenTcRows + cx.ambiguous + cx.none);
+  assert.equal(await page.$$eval('#import-issues tbody tr', trs => trs.length), expected.brokenTcRows + cx.ambiguous + cx.none);
+  assert.match(await text(page, '#import-issues'), /İptal: birden fazla poliçe/);
+  assert.match(await text(page, '#import-issues'), /İptal: poliçe bulunamadı/);
   const counts = await store(page, () => [Store.customers.size, Store.policies.size, DB.kind]);
   assert.deepEqual(counts, [expected.totalCustomers, expected.totalPolicies, 'indexeddb']);
 });

@@ -13,7 +13,7 @@ funnel arrow-up-down ellipsis copy git-merge undo-2 file-spreadsheet database la
 credit-card lightbulb list history external-link menu eye eye-off cloud-upload folder-open save rotate-ccw circle-check
 circle-alert circle-x hand-coins receipt notebook-pen sticky-note link arrow-right arrow-left briefcase building-2 plane
 hard-drive keyboard command zap star filter-x sparkles badge-percent calculator file-down file-up chart-pie trending-up
-trending-down`.split(/\s+/).filter(Boolean);
+trending-down ban file-x unlink link-2 file-check file-warning lock cloud-check cloud-alert refresh-ccw file-search`.split(/\s+/).filter(Boolean);
 
 const out = {};
 for (const n of names) {

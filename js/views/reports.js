@@ -25,13 +25,14 @@
   App.saveWorkbook = save;
 
   App.exportAll = function () {
-    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: Store.derived().policies, customers: Store.customers, monthsMeta: Store.months, lang: lang(), withSummary: true, withCustomers: true });
+    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: Store.derived().policies, customers: Store.customers, monthsMeta: Store.months, lang: lang(), withSummary: true, withCustomers: true,
+      cancels: Array.from(Store.cancellations.values()), outstanding: Store.outstanding });
     save(wb, 'portfoy-' + stamp() + '.xlsx');
   };
 
   App.exportMonths = function (keys) {
     var list = Store.derived().policies.filter(function (p) { return keys.indexOf(p.month) >= 0; });
-    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: list, customers: Store.customers, monthsMeta: Store.months, lang: lang(), months: keys });
+    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: list, customers: Store.customers, monthsMeta: Store.months, lang: lang(), months: keys, cancels: Array.from(Store.cancellations.values()) });
     save(wb, (keys.length === 1 ? U.fold(U.monthLabel(keys[0], 'tr')).replace(/ /g, '-') : 'aylar') + '.xlsx');
   };
 
@@ -60,7 +61,7 @@
 
   App.exportCustomers = function (list) {
     var map = new Map(list.map(function (c) { return [c.id, c]; }));
-    var ws = Exporter.customersSheet(window.XLSX, map, Store.derived().policies.filter(function (p) { return map.has(p.customerId); }), lang());
+    var ws = Exporter.customersSheet(window.XLSX, map, Store.derived().policies.filter(function (p) { return map.has(p.customerId); }), lang(), Store.outstanding);
     var wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, lang() === 'en' ? 'Customers' : 'Müşteriler');
     save(wb, 'musteriler-' + stamp() + '.xlsx');
@@ -107,6 +108,32 @@
       if (vs.company && (!p.company || U.companyKey(p.company) !== vs.company)) return false;
       if (vs.cat && Schema.categoryOf(p.policyType) !== vs.cat) return false;
       return true;
+    });
+  }
+
+  /** İptal rows in the report's period (and company / line of business, judged by the row or its policy). */
+  function filteredCancels(vs) {
+    var out = [];
+    Store.cancellations.forEach(function (x) {
+      if (vs.from && x.month < vs.from) return;
+      if (vs.to && x.month > vs.to) return;
+      var p = x.policyId && Store.policies.get(x.policyId);
+      var company = (p && p.company) || x.company;
+      if (vs.company && (!company || U.companyKey(company) !== vs.company)) return;
+      if (vs.cat && Schema.categoryOf((p && p.policyType) || x.policyText) !== vs.cat) return;
+      out.push(x);
+    });
+    return out.sort(function (a, b) { return U.cmp(a.month, b.month); });
+  }
+
+  function cancelRowsByMonth(xs, list) {
+    var prod = new Map(Portfolio.aggregate(list, function (p) { return p.month; }, true).map(function (r) { return [r.key, r.premium]; }));
+    var by = U.groupBy(xs, function (x) { return x.month; });
+    return Array.from(by.keys()).sort().map(function (k) {
+      var g = by.get(k);
+      var refund = U.round2(U.sum(g, Portfolio.refundOf));
+      return { key: k, n: g.length, card: U.round2(U.sum(g, function (x) { return x.card; })), account: U.round2(U.sum(g, function (x) { return x.account; })),
+        cash: U.round2(U.sum(g, function (x) { return x.cash; })), refund: refund, premium: prod.get(k) || 0, net: U.round2((prod.get(k) || 0) - refund) };
     });
   }
 
@@ -208,7 +235,7 @@
             { label: t('common.amount'), align: 'r', value: function (r) { return F.money(r.v); } },
             { label: t('report.share'), align: 'r', value: function (r) { return F.pct(tot.premium ? r.v / tot.premium : null); } }
           ], payRows),
-          tot.account ? h('p', { class: 'small dim' }, t('reports.accountLine', { paid: F.money(accPaid), open: F.money(U.round2(U.sum(list, Portfolio.outstanding))) }), ' ', h('a', { href: '#tahsilat' }, t('nav.collections'))) : null,
+          tot.account ? h('p', { class: 'small dim' }, t('reports.accountLine', { paid: F.money(accPaid), open: F.money(U.round2(U.sum(list, Store.outstanding))) }), ' ', h('a', { href: '#tahsilat' }, t('nav.collections'))) : null,
           Math.abs(unpaid) >= 1 ? h('p', { class: 'small muted' }, t('reports.unassigned', { v: F.money(unpaid) })) : null));
       var profs = Portfolio.aggregate(list.map(function (p) { var c = Store.customers.get(p.customerId); return Object.assign({}, p, { _prof: c && c.profession }); }), function (p) { return p._prof || ''; });
       var profCard = h('section', { class: 'card', id: 'rep-profession' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.byProfession')), h('span', { class: 'sub' }, t('reports.top', { n: 10 }))),
@@ -257,6 +284,19 @@
       var oppCard = h('section', { class: 'card', id: 'rep-opps', style: { overflow: 'hidden' } }, h('div', { class: 'card-head' }, h('h2', null, t('dash.opportunities')), h('span', { class: 'sub' }, t('reports.oppSub', { n: F.num(opps.length) }))),
         h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, opps.length ? oppTable.el : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('customer.noOpps'))));
 
+      // cancellations (İptal blocks of the months)
+      var cancelRows = cancelRowsByMonth(filteredCancels(vs), list);
+      var cancelCard = h('section', { class: 'card', id: 'rep-cancels' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.cancelTitle')), h('span', { class: 'sub' }, t('reports.cancelSub'))),
+        h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, cancelRows.length ? Charts.miniTable([
+          { label: t('common.month'), value: function (r) { return h('a', { href: '#ay-' + r.key }, F.month(r.key)); } },
+          { label: t('reports.colCancels'), align: 'r', value: function (r) { return F.num(r.n); } },
+          { label: t('field.card'), align: 'r', value: function (r) { return F.money(r.card); } },
+          { label: t('field.account'), align: 'r', value: function (r) { return F.money(r.account); } },
+          { label: t('field.cash'), align: 'r', value: function (r) { return F.money(r.cash); } },
+          { label: t('reports.colRefund'), align: 'r', value: function (r) { return h('strong', null, F.money(r.refund)); } },
+          { label: t('reports.colNetProd'), align: 'r', value: function (r) { return F.money(r.net); } }
+        ], cancelRows) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('cancel.empty'))));
+
       var summary = h('section', { class: 'card kpis k5' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPolicies')), h('div', { class: 'kpi-value', id: 'rep-count' }, F.num(tot.count))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPremium')), h('div', { class: 'kpi-value', id: 'rep-premium', title: F.money(tot.premium) }, F.money0(tot.premium))),
@@ -264,7 +304,7 @@
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('report.commRate')), h('div', { class: 'kpi-value' }, F.pct(tot.premium ? tot.commission / tot.premium : null))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCustomers')), h('div', { class: 'kpi-value' }, F.num(tot.customerCount))));
       var node = h('div', { class: 'stack' }, filters, summary, monthly, h('div', { class: 'grid-2' }, newRen, payCard), h('div', { class: 'grid-2' }, companyCard, catCard),
-        h('div', { class: 'grid-2' }, profCard, topCard), retCard, oppCard);
+        h('div', { class: 'grid-2' }, profCard, topCard), retCard, cancelCard, oppCard);
       if (App.viewState.reportsFocus) {
         var focus = App.viewState.reportsFocus;
         App.viewState.reportsFocus = null;
@@ -297,7 +337,23 @@
       { name: t('reports.monthly'), columns: aggCols(t('common.month'), function (r) { return r.key === 'total' ? t('common.total') : U.monthLabel(r.key, lang()); }), rows: byMonth },
       { name: t('dash.byCompany'), columns: aggCols(t('field.company'), function (r) { return r.key === '—' ? t('common.unknown') : (d.companyNames.get(r.key) || r.key); }), rows: Portfolio.aggregate(list, function (p) { return p.company ? U.companyKey(p.company) : ''; }) },
       { name: t('dash.byCategory'), columns: aggCols(t('report.category'), function (r) { return Schema.categoryLabel(r.key, lang()); }), rows: Portfolio.aggregate(list, function (p) { return Schema.categoryOf(p.policyType); }) },
-      { name: t('reports.topCustomers'), columns: aggCols(t('common.customer'), function (r) { var c = Store.customers.get(r.key); return c ? c.name : ''; }), rows: Portfolio.aggregate(list, function (p) { return p.customerId; }).slice(0, 100) }
+      { name: t('reports.topCustomers'), columns: aggCols(t('common.customer'), function (r) { var c = Store.customers.get(r.key); return c ? c.name : ''; }), rows: Portfolio.aggregate(list, function (p) { return p.customerId; }).slice(0, 100) },
+      { name: t('reports.cancelTitle'), columns: [
+        { label: t('common.month'), value: function (x) { return U.monthLabel(x.month, lang()); } },
+        { label: t('cancel.h.company'), value: function (x) { return x.company || ''; } },
+        { label: t('cancel.h.policy'), value: function (x) { return x.policyText || ''; } },
+        { label: t('cancel.h.insured'), value: function (x) { return x.insuredName || ''; } },
+        { label: t('field.card'), type: 'money', value: function (x) { return x.card; } },
+        { label: t('field.account'), type: 'money', value: function (x) { return x.account; } },
+        { label: t('field.cash'), type: 'money', value: function (x) { return x.cash; } },
+        { label: t('cancel.colMatch'), value: function (x) {
+          var p = x.policyId && Store.policies.get(x.policyId);
+          if (!p) return '';
+          var c = Store.customers.get(p.customerId);
+          return [c && c.name, p.policyType, U.monthLabel(p.month, lang()), p.policyNo].filter(Boolean).join(' · ');
+        } },
+        { label: t('cancel.colStatus'), value: function (x) { var p = x.policyId && Store.policies.get(x.policyId); return p ? t(x.match === 'auto' ? 'cancel.m.auto' : 'cancel.m.manual') : t(x.match === 'ambiguous' ? 'cancel.m.ambiguous' : x.locked ? 'cancel.m.notInFile' : 'cancel.m.none', { n: (x.candidates || []).length }); } }
+      ], rows: filteredCancels(vs) }
     ]);
     save(wb, 'rapor-' + stamp() + '.xlsx');
   }

@@ -153,7 +153,7 @@
 
   // ------------------------------------------------------------------ collections
   App.paymentDialog = function (p) {
-    var rem = Portfolio.outstanding(p);
+    var rem = Store.outstanding(p);
     var c = Store.customers.get(p.customerId);
     var amount = h('input', { id: 'pay-amount', class: 'num', inputmode: 'decimal', value: U.fmtNumber(rem > 0 ? rem : 0, window.I18N.lang, 2), autocomplete: 'off', style: { textAlign: 'right' } });
     var date = UI.dateInput('pay-date', U.todayISO());
@@ -189,15 +189,15 @@
       var vs = App.viewState.collections = Object.assign({ filter: 'open', q: '' }, App.viewState.collections || {});
       var withAcc = d.policies.filter(function (p) { return p.account > 0; });
       if (!withAcc.length) return h('section', { class: 'card' }, UI.empty({ icon: 'wallet', title: t('collections.emptyTitle'), text: t('collections.emptyText') }));
-      var open = withAcc.filter(function (p) { return Portfolio.outstanding(p) > 0; });
-      var total = U.sum(open, Portfolio.outstanding);
+      var open = withAcc.filter(function (p) { return Store.outstanding(p) > 0; });
+      var total = U.sum(open, Store.outstanding);
       var month = U.currentMonthKey();
       var payments = [];
       withAcc.forEach(function (p) { (p.payments || []).forEach(function (y) { payments.push({ p: p, y: y }); }); });
       payments.sort(function (a, b) { return U.cmp(b.y.date, a.y.date); });
       var thisMonth = U.sum(payments.filter(function (x) { return x.y.date && x.y.date.slice(0, 7) === month; }), function (x) { return x.y.amount; });
       var oldest = open.slice().sort(function (a, b) { return U.cmp(a.month, b.month); })[0];
-      var rows = (vs.filter === 'open' ? open : vs.filter === 'paid' ? withAcc.filter(function (p) { return Portfolio.outstanding(p) <= 0; }) : withAcc);
+      var rows = (vs.filter === 'open' ? open : vs.filter === 'paid' ? withAcc.filter(function (p) { return Store.outstanding(p) <= 0; }) : withAcc);
       var q = U.fold(vs.q);
       if (q.length >= 2) rows = rows.filter(function (p) { var c = Store.customers.get(p.customerId); return U.fold([c && c.name, p.policyType, p.policyNo].join(' ')).indexOf(q) >= 0; });
       var kpis = h('section', { class: 'card kpis k4' },
@@ -217,23 +217,26 @@
           { key: 'month', label: t('common.month'), sort: true, render: function (p) { return F.month(p.month, true); } },
           { key: 'due', label: t('field.account'), align: 'r', sort: function (p) { return p.account; }, render: function (p) { return F.money(p.account); } },
           { key: 'paid', label: t('collections.paidCol'), align: 'r', sort: function (p) { return Portfolio.paidOnAccount(p); }, render: function (p) { return F.money(Portfolio.paidOnAccount(p)); } },
-          { key: 'remaining', label: t('collections.remaining'), align: 'r', sort: function (p) { return Portfolio.outstanding(p); }, render: function (p) {
-            var r = Portfolio.outstanding(p);
-            return r > 0 ? h('strong', { style: { color: 'var(--warn-ink)' } }, F.money(r)) : UI.pill(t('collections.paid'), 'good');
+          { key: 'remaining', label: t('collections.remaining'), align: 'r', sort: function (p) { return Store.outstanding(p); }, render: function (p) {
+            var r = Store.outstanding(p);
+            var cx = Store.cancelOf(p.id);
+            var credit = cx && cx.account ? h('div', { class: 'small', style: { color: 'var(--bad-ink)', marginTop: '2px' } }, t('cancel.credit', { v: F.money(cx.account) })) : null;
+            if (r > 0) return h('div', null, h('strong', { style: { color: 'var(--warn-ink)' } }, F.money(r)), credit);
+            return h('div', null, cx ? UI.pill(t('state.cancelledIn', { m: F.month(cx.month, true) }), 'cancel') : UI.pill(t('collections.paid'), 'good'), credit);
           } },
           { key: 'last', label: t('collections.lastPayment'), sort: function (p) { var ys = p.payments || []; return ys.length ? ys[ys.length - 1].date : ''; }, render: function (p) {
             var ys = p.payments || [];
             return ys.length ? F.date(ys[ys.length - 1].date) : h('span', { class: 'muted' }, '—');
           } },
           { key: 'act', label: '', cls: 'actions-cell', render: function (p) {
-            return Portfolio.outstanding(p) > 0 ? h('button', { type: 'button', class: 'btn btn-sm btn-primary', id: 'pay-' + p.id, onClick: function () { App.paymentDialog(p); } }, icon('hand-coins'), t('collections.take')) : null;
+            return Store.outstanding(p) > 0 ? h('button', { type: 'button', class: 'btn btn-sm btn-primary', id: 'pay-' + p.id, onClick: function () { App.paymentDialog(p); } }, icon('hand-coins'), t('collections.take')) : null;
           } }
         ],
         footer: function (rs) {
           return [h('td', { colspan: 3, class: 'full' }, t('collections.footer', { n: F.num(rs.length) })),
             h('td', { class: 'r', 'data-label': t('field.account') }, F.money(U.sum(rs, function (p) { return p.account; }))),
             h('td', { class: 'r', 'data-label': t('collections.paidCol') }, F.money(U.sum(rs, Portfolio.paidOnAccount))),
-            h('td', { class: 'r', 'data-label': t('collections.remaining') }, F.money(U.sum(rs, Portfolio.outstanding))), h('td', { colspan: 2 })];
+            h('td', { class: 'r', 'data-label': t('collections.remaining') }, F.money(U.sum(rs, Store.outstanding))), h('td', { colspan: 2 })];
         }
       });
       var toolbar = h('div', { class: 'toolbar' },

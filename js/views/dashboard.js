@@ -103,8 +103,10 @@
       custIds.forEach(function (id) { if (Store.summary(id).months.length > 1) multi++; });
       var due = 0, expired = 0;
       d.renewal.forEach(function (i) { if (i.state === 'due') due++; else if (i.state === 'expired' && i.daysLeft >= -60) expired++; });
+      var cancelCount = 0;
+      Store.cancellations.forEach(function (x) { if (monthsSet.has(x.month)) cancelCount++; });
       var outstanding = 0, openCount = 0;
-      d.policies.forEach(function (p) { var o = Portfolio.outstanding(p); if (o > 0) { outstanding += o; openCount++; } });
+      d.policies.forEach(function (p) { var o = Store.outstanding(p); if (o > 0) { outstanding += o; openCount++; } });
 
       var filters = h('div', { class: 'toolbar' },
         h('label', { class: 'muted small', for: 'dash-period' }, t('period.label')),
@@ -117,7 +119,8 @@
         kpi({ id: 'kpi-commission', icon: 'badge-percent', label: t('dash.kpiCommission'), value: F.moneyC(tot.commission), title: F.money(tot.commission),
           sub: t('dash.ofPremium', { p: F.pct(tot.premium ? tot.commission / tot.premium : null) }), spark: Charts.sparkline(series.map(function (s) { return s.commission; })) }),
         kpi({ id: 'kpi-policies', icon: 'file-text', label: t('dash.kpiPolicies'), value: F.num(tot.count),
-          sub: t('dash.newBiz', { n: F.num(tot.newCount), p: F.pct(tot.count ? tot.newCount / tot.count : null, 0) }), spark: Charts.sparkline(series.map(function (s) { return s.count; })) }),
+          sub: t('dash.newBiz', { n: F.num(tot.newCount), p: F.pct(tot.count ? tot.newCount / tot.count : null, 0) }) + (cancelCount ? ' · ' + t('dash.cancelSub', { n: F.num(cancelCount) }) : ''),
+          spark: Charts.sparkline(series.map(function (s) { return s.count; })) }),
         kpi({ id: 'kpi-customers', icon: 'users', label: t('dash.kpiCustomers'), value: F.num(custIds.size), href: 'musteriler',
           sub: t('dash.multiMonth', { n: F.num(multi) }) }),
         kpi({ id: 'kpi-due', icon: 'calendar-clock', label: t('dash.kpiDue', { n: Store.settings.renewalWindow }), value: F.num(due), href: 'yenilemeler',
@@ -300,6 +303,7 @@
       case 'due': return App.daysPill(info.daysLeft);
       case 'active': return UI.pill(t('state.active'), 'accent');
       case 'short': return p && p.endDate && p.endDate < U.todayISO() ? UI.pill(t('state.ended'), 'plain') : UI.pill(t('state.active'), 'accent');
+      case 'cancelled': return UI.pill(t('state.cancelledIn', { m: F.month(info.cancel.month, true) }), 'cancel', App.refundText ? App.refundText(info.cancel) : null);
       default: return null;
     }
   };

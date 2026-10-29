@@ -28,6 +28,7 @@
     policies: new Map(),
     tasks: new Map(),
     activities: new Map(),
+    cancellations: new Map(),
     settings: Object.assign({}, DEFAULT_SETTINGS),
     months: {},
     imports: [],
@@ -79,6 +80,7 @@
       Store.policies = new Map(map.policies.map(function (x) { return [x.id, x]; }));
       Store.tasks = new Map(map.tasks.map(function (x) { return [x.id, x]; }));
       Store.activities = new Map(map.activities.map(function (x) { return [x.id, x]; }));
+      Store.cancellations = new Map((map.cancellations || []).map(function (x) { return [x.id, x]; }));
       map.meta.forEach(function (m) {
         if (m.key === 'settings') Store.settings = Object.assign({}, DEFAULT_SETTINGS, m.value || {});
         else if (m.key === 'months') Store.months = m.value || {};
@@ -120,13 +122,21 @@
     var monthSet = new Set();
     policies.forEach(function (p) { if (p.month) monthSet.add(p.month); });
     var today = U.todayISO();
+    var cancelByPolicy = new Map(), cancelsByMonth = new Map();
+    Store.cancellations.forEach(function (x) {
+      if (x.policyId && Store.policies.has(x.policyId)) cancelByPolicy.set(x.policyId, x);
+      if (x.month) { monthSet.add(x.month); if (!cancelsByMonth.has(x.month)) cancelsByMonth.set(x.month, []); cancelsByMonth.get(x.month).push(x); }
+    });
+    cancelsByMonth.forEach(function (list) { list.sort(function (a, b) { return (a.source && a.source.row || 1e9) - (b.source && b.source.row || 1e9) || (a.createdAt || 0) - (b.createdAt || 0); }); });
     cache = {
       v: Store.version,
       today: today,
       policies: policies,
       byCustomer: byCustomer,
       months: Array.from(monthSet).sort(),
-      renewal: Portfolio.renewalInfo(policies, { today: today, windowDays: Number(Store.settings.renewalWindow) || 30 }),
+      cancelByPolicy: cancelByPolicy,
+      cancelsByMonth: cancelsByMonth,
+      renewal: Portfolio.renewalInfo(policies, { today: today, windowDays: Number(Store.settings.renewalWindow) || 30, cancelled: cancelByPolicy }),
       companyNames: Portfolio.companyNames(policies)
     };
     summaryCache = new Map();
@@ -135,6 +145,17 @@
   };
 
   Store.policiesOf = function (customerId) { return Store.derived().byCustomer.get(customerId) || []; };
+
+  /** The İptal row that cancelled this policy, or null. */
+  Store.cancelOf = function (policyId) { return Store.derived().cancelByPolicy.get(policyId) || null; };
+  Store.cancellationsOf = function (month) { return Store.derived().cancelsByMonth.get(month) || []; };
+  Store.isCancelled = function (policyId) { return Store.derived().cancelByPolicy.has(policyId); };
+
+  /** Open Cari balance of a policy; a refund written to Cari in its İptal row counts as paid back. */
+  Store.outstanding = function (p) {
+    var x = Store.cancelOf(p.id);
+    return Portfolio.outstanding(p, x ? x.account || 0 : 0);
+  };
 
   Store.companyLabel = function (name) {
     if (!name) return '';
@@ -147,18 +168,19 @@
     if (summaryCache.has(customerId)) return summaryCache.get(customerId);
     var list = d.byCustomer.get(customerId) || [];
     var months = new Set(), cats = new Set();
-    var s = { count: list.length, premium: 0, commission: 0, active: 0, nextEnd: null, nextDays: null, outstanding: 0, months: [], cats: [], first: null, last: null };
+    var s = { count: list.length, premium: 0, commission: 0, active: 0, cancelled: 0, nextEnd: null, nextDays: null, outstanding: 0, months: [], cats: [], first: null, last: null };
     list.forEach(function (p) {
       s.premium += p.premium || 0;
       s.commission += p.commission || 0;
       if (p.month) months.add(p.month);
       cats.add(Schema.categoryOf(p.policyType));
+      if (d.cancelByPolicy.has(p.id)) { s.cancelled++; s.outstanding += Store.outstanding(p); return; }
       if (p.endDate && p.endDate >= d.today) {
         s.active++;
         var info = d.renewal.get(p.id);
         if (info && info.state !== 'renewed' && info.state !== 'short' && (!s.nextEnd || p.endDate < s.nextEnd)) s.nextEnd = p.endDate;
       }
-      s.outstanding += Portfolio.outstanding(p);
+      s.outstanding += Store.outstanding(p);
     });
     s.premium = U.round2(s.premium);
     s.commission = U.round2(s.commission);
@@ -347,6 +369,7 @@
     del('policies', policies.map(function (p) { return p.id; }));
     del('tasks', tasks.map(function (t) { return t.id; }));
     del('activities', acts.map(function (a) { return a.id; }));
+    relinkAndSave();
     emit();
     return function undo() {
       Store.customers.set(c.id, c);
@@ -357,6 +380,7 @@
       put('policies', policies);
       put('tasks', tasks);
       put('activities', acts);
+      relinkAndSave();
       emit();
     };
   };
@@ -445,6 +469,7 @@
         put('policies', [old]);
       }
     }
+    relinkAndSave();
     emit();
     return { policy: p, customer: cust, isNew: isNew };
   };
@@ -454,6 +479,7 @@
     if (!p) return function () {};
     Store.policies.delete(id);
     del('policies', [id]);
+    relinkAndSave();
     var a = Store.log({ customerId: p.customerId, type: 'policyDeleted', text: [p.policyType, p.policyNo].filter(Boolean).join(' · ') });
     emit();
     return function undo() {
@@ -461,6 +487,7 @@
       put('policies', [p]);
       Store.activities.delete(a.id);
       del('activities', [a.id]);
+      relinkAndSave();
       emit();
     };
   };
@@ -546,26 +573,184 @@
     return n;
   };
 
+  // ------------------------------------------------------------------ cancellations (İptal rows)
+  var CANCEL_FIELDS = ['month', 'company', 'policyText', 'insuredName', 'card', 'account', 'cash', 'note'];
+
+  function amount(v) { var n = U.parseNumber(v); return n ? U.round2(n) : null; }
+
+  function newCancel(data, source) {
+    var now = Date.now();
+    var x = { id: U.uid('x'), createdAt: now, updatedAt: now, source: source || { type: 'manual' }, policyId: null, match: 'none', candidates: [] };
+    CANCEL_FIELDS.forEach(function (k) { if (data[k] != null && data[k] !== '') x[k] = data[k]; });
+    return x;
+  }
+
+  /**
+   * Finds the cancelled policy for every İptal row that has none yet. The user's own decisions (locked) and
+   * automatic matches whose policy still exists stay as they are. Returns the rows that changed.
+   */
+  function relink() {
+    var taken = [], todo = [];
+    Store.cancellations.forEach(function (x) {
+      var valid = !!(x.policyId && Store.policies.has(x.policyId));
+      if (x.locked && x.policyId && !valid) { x.locked = false; x.policyId = null; } // the chosen policy was deleted
+      if ((x.locked || x.match === 'auto') && valid) { taken.push(x.policyId); return; }
+      if (x.locked) return; // the user said: no policy in this file
+      todo.push(x);
+    });
+    if (!todo.length) return [];
+    var found = Portfolio.matchCancellations(todo.map(function (x) {
+      return { id: x.id, month: x.month, company: x.company, policyText: x.policyText, insuredName: x.insuredName, card: x.card, account: x.account, cash: x.cash, row: x.source && x.source.row };
+    }), Array.from(Store.policies.values()), Store.customers, { taken: taken });
+    var changed = [];
+    todo.forEach(function (x) {
+      var r = found.get(x.id);
+      var before = [x.policyId || '', x.match, (x.candidates || []).join()].join('|');
+      x.policyId = r.policyId;
+      x.match = r.match;
+      x.candidates = r.candidates;
+      if ([x.policyId || '', x.match, x.candidates.join()].join('|') !== before) { x.updatedAt = Date.now(); changed.push(x); }
+    });
+    return changed;
+  }
+  function relinkAndSave() { var ch = relink(); put('cancellations', ch); return ch; }
+
+  function logCancel(x) {
+    var p = x.policyId && Store.policies.get(x.policyId);
+    if (p) Store.log({ customerId: p.customerId, policyId: p.id, type: 'policyCancelled', text: [p.policyType, U.monthLabel(x.month, 'tr')].filter(Boolean).join(' · '), cancelId: x.id });
+  }
+
+  /** Cancels a policy from the app. data: { month, card, account, cash, note } (refunds per payment type). */
+  Store.cancelPolicy = function (policyId, data) {
+    var p = Store.policies.get(policyId);
+    if (!p || Store.isCancelled(policyId)) return null;
+    var c = Store.customers.get(p.customerId);
+    data = data || {};
+    var x = newCancel({
+      month: data.month || U.currentMonthKey(), company: p.company || '', policyText: p.policyType || '', insuredName: p.insuredName || (c ? c.name : ''),
+      card: amount(data.card), account: amount(data.account), cash: amount(data.cash), note: U.collapse(data.note || '')
+    });
+    x.policyId = p.id;
+    x.match = 'manual';
+    x.locked = true;
+    Store.cancellations.set(x.id, x);
+    put('cancellations', [x]);
+    logCancel(x);
+    emit();
+    return x;
+  };
+
+  /** Adds or edits an İptal row as written on the month page; the app then looks for its policy. */
+  Store.saveCancellation = function (input) {
+    var x = input.id ? Store.cancellations.get(input.id) : null;
+    if (!x) { x = newCancel({}, { type: 'manual' }); Store.cancellations.set(x.id, x); }
+    CANCEL_FIELDS.forEach(function (k) {
+      if (input[k] === undefined) return;
+      var v = ['card', 'account', 'cash'].indexOf(k) >= 0 ? amount(input[k]) : (k === 'month' ? input[k] : U.collapse(input[k]));
+      if (v == null || v === '') delete x[k]; else x[k] = v;
+    });
+    x.updatedAt = Date.now();
+    if (!x.locked) { x.policyId = null; x.match = 'none'; x.candidates = []; }
+    put('cancellations', [x]);
+    relinkAndSave();
+    emit();
+    return x;
+  };
+
+  /** The user's choice: a policy id, null for "not in this file", or 'auto' to let the app decide again. */
+  Store.linkCancellation = function (id, policyId) {
+    var x = Store.cancellations.get(id);
+    if (!x) return;
+    if (policyId === 'auto') { x.locked = false; x.policyId = null; x.match = 'none'; }
+    else {
+      var other = policyId && Store.cancelOf(policyId);
+      if (other && other.id !== x.id) { other.policyId = null; other.match = 'none'; other.locked = false; put('cancellations', [other]); }
+      x.locked = true;
+      x.policyId = policyId || null;
+      x.match = policyId ? 'manual' : 'none';
+    }
+    x.candidates = [];
+    x.updatedAt = Date.now();
+    put('cancellations', [x]);
+    relinkAndSave();
+    if (x.policyId) logCancel(x);
+    emit();
+  };
+
+  Store.deleteCancellation = function (id) {
+    var x = Store.cancellations.get(id);
+    if (!x) return function () {};
+    Store.cancellations.delete(id);
+    del('cancellations', [id]);
+    relinkAndSave();
+    emit();
+    return function undo() { Store.cancellations.set(x.id, x); put('cancellations', [x]); relinkAndSave(); emit(); };
+  };
+
+  /** İptal rows of an import: the same row read again is recognised, new rows are added. */
+  function importCancels(recs, ctx) {
+    var pool = new Map();
+    Store.cancellations.forEach(function (x) { var k = Portfolio.cancelKey(x); if (!pool.has(k)) pool.set(k, []); pool.get(k).push(x); });
+    var claimed = new Set(), out = { added: [], updated: [], unchanged: 0, rows: [] };
+    recs.forEach(function (r) {
+      var k = Portfolio.cancelKey(r);
+      var hit = (pool.get(k) || []).filter(function (x) { return !claimed.has(x.id); })[0];
+      if (hit) {
+        claimed.add(hit.id);
+        hit.cells = r.cells;
+        var s = hit.source || {};
+        if (s.sheet !== r.sheet || s.row !== r.row || s.file !== ctx.fileName) {
+          hit.source = { type: 'import', importId: s.importId || ctx.importId, file: ctx.fileName, sheet: r.sheet, row: r.row };
+          hit.updatedAt = ctx.now;
+          out.updated.push(hit);
+        } else out.unchanged++;
+        out.rows.push({ rec: r, x: hit });
+        return;
+      }
+      var x = newCancel(r, { type: 'import', importId: ctx.importId, file: ctx.fileName, sheet: r.sheet, row: r.row });
+      x.cells = r.cells;
+      x.createdAt = x.updatedAt = ctx.now;
+      Store.cancellations.set(x.id, x);
+      claimed.add(x.id);
+      out.added.push(x);
+      out.rows.push({ rec: r, x: x });
+    });
+    return out;
+  }
+
   // ------------------------------------------------------------------ import
   /**
-   * records from Importer.buildRecords; analysis for month metadata.
-   * opts: { mode: 'merge' | 'replace', fileName, saveMappings: {} }
+   * records (and cancels) from Importer.buildRecords; analysis for month metadata.
+   * opts: { mode: 'merge' | 'replace', fileName, saveMappings: {}, cancels: [] }
    */
   Store.importRecords = function (records, analysis, opts) {
     opts = opts || {};
     var cleared = opts.mode === 'replace' ? Store.clearData({ silent: true }) : Promise.resolve();
     var importId = U.uid('i');
+    var now = Date.now();
     var state = { customers: Store.customers, policies: Store.policies };
-    var res = Portfolio.importRecords(state, records, { importId: importId, fileName: opts.fileName, now: Date.now() });
+    var res = Portfolio.importRecords(state, records, { importId: importId, fileName: opts.fileName, now: now });
     res.customersAdded.forEach(function (c) { c.createdBy = importId; });
-    // remember the original column layout of each month for Excel export
+    // İptal rows, then find the policy each one cancels
+    var cres = importCancels(opts.cancels || [], { importId: importId, fileName: opts.fileName || '', now: now });
+    var relinked = relink();
+    res.cancels = { rows: cres.rows.length, added: cres.added.length, updated: cres.updated.length, unchanged: cres.unchanged, auto: 0, manual: 0, ambiguous: 0, none: 0 };
+    cres.rows.forEach(function (o) {
+      var x = o.x;
+      res.cancels[x.match === 'auto' || x.match === 'manual' ? (x.locked ? 'manual' : 'auto') : x.match]++;
+      if (x.match === 'none' || x.match === 'ambiguous') {
+        res.issues.push({ sheet: o.rec.sheet, row: o.rec.row, type: x.match === 'none' ? 'cancelNone' : 'cancelAmbiguous', value: [x.insuredName, x.policyText, x.company].filter(Boolean).join(' · '), cancelId: x.id });
+      }
+    });
+    // remember each month's sheet layout: Excel export and writing back to the file use it
     var monthsTouched = [];
     (analysis ? analysis.sheets : []).forEach(function (s) {
       if (!s.include || !s.month.key) return;
       monthsTouched.push(s.month.key);
       Store.months[s.month.key] = {
-        sheet: s.name, file: opts.fileName || '', at: Date.now(),
-        columns: s.columns.filter(function (c) { return c.role !== 'ignored'; }).map(function (c) { return { header: c.header, field: c.role === 'custom' ? null : c.field }; })
+        sheet: s.name, file: opts.fileName || '', at: now,
+        columns: s.columns.filter(function (c) { return c.role !== 'ignored'; }).map(function (c) { return { header: c.header, field: c.role === 'custom' ? null : c.field }; }),
+        layout: root.Importer && root.Importer.layoutOf ? root.Importer.layoutOf(s) : null
       };
     });
     var entry = {
@@ -574,7 +759,7 @@
       months: Array.from(new Set(monthsTouched)).sort(),
       rows: records.length, added: res.added.length, updated: res.updated.length, unchanged: res.unchanged,
       duplicateRows: res.duplicateRows, customersAdded: res.customersAdded.length, customersUpdated: res.customersUpdated.length,
-      issues: res.issues.length
+      issues: res.issues.length, cancels: res.cancels.rows, cancelsAdded: res.cancels.added
     };
     Store.imports = [entry].concat(Store.imports).slice(0, 50);
     if (opts.saveMappings && Object.keys(opts.saveMappings).length) {
@@ -585,6 +770,7 @@
       var ps = [
         put('customers', res.customersAdded.concat(res.customersUpdated)),
         put('policies', res.added.concat(res.updated)),
+        put('cancellations', Array.from(new Set(cres.added.concat(cres.updated, relinked)))),
         putMeta('months'),
         putMeta('imports')
       ];
@@ -603,12 +789,17 @@
     Store.policies.forEach(function (p) { left.add(p.customerId); });
     Store.customers.forEach(function (c) { if (c.createdBy === importId && !left.has(c.id)) removedCustomers.push(c); });
     removedCustomers.forEach(function (c) { Store.customers.delete(c.id); });
+    var removedCancels = [];
+    Store.cancellations.forEach(function (x) { if (x.source && x.source.importId === importId) removedCancels.push(x.id); });
+    removedCancels.forEach(function (id) { Store.cancellations.delete(id); });
     del('policies', removed.map(function (p) { return p.id; }));
     del('customers', removedCustomers.map(function (c) { return c.id; }));
+    del('cancellations', removedCancels);
+    relinkAndSave();
     Store.imports = Store.imports.map(function (e) { return e.id === importId ? Object.assign({}, e, { undone: Date.now() }) : e; });
     putMeta('imports');
     emit();
-    return { policies: removed.length, customers: removedCustomers.length };
+    return { policies: removed.length, customers: removedCustomers.length, cancels: removedCancels.length };
   };
 
   Store.deleteMonth = function (key, removeOrphans) {
@@ -622,9 +813,13 @@
       Store.customers.forEach(function (c) { if (!left.has(c.id)) orphans.push(c); });
       orphans.forEach(function (c) { Store.customers.delete(c.id); });
     }
+    var cancels = Store.cancellationsOf(key).map(function (x) { return x.id; });
+    cancels.forEach(function (id) { Store.cancellations.delete(id); });
     delete Store.months[key];
     del('policies', removed.map(function (p) { return p.id; }));
     del('customers', orphans.map(function (c) { return c.id; }));
+    del('cancellations', cancels);
+    relinkAndSave();
     putMeta('months');
     emit();
     return { policies: removed.length, customers: orphans.length };
@@ -636,9 +831,10 @@
     Store.policies = new Map();
     Store.tasks = new Map();
     Store.activities = new Map();
+    Store.cancellations = new Map();
     Store.months = {};
     Store.imports = [];
-    var p = Promise.all(['customers', 'policies', 'tasks', 'activities'].map(function (s) { return track(DB.clear(s)); }))
+    var p = Promise.all(['customers', 'policies', 'tasks', 'activities', 'cancellations'].map(function (s) { return track(DB.clear(s)); }))
       .then(function () { return Promise.all([putMeta('months'), putMeta('imports')]); });
     if (!opts || !opts.silent) emit();
     return p;
@@ -650,7 +846,8 @@
       app: 'sigorta-portfoy', format: 1, exportedAt: new Date().toISOString(),
       settings: Store.settings, months: Store.months, imports: Store.imports, mappings: Store.mappings,
       customers: Array.from(Store.customers.values()), policies: Array.from(Store.policies.values()),
-      tasks: Array.from(Store.tasks.values()), activities: Array.from(Store.activities.values())
+      tasks: Array.from(Store.tasks.values()), activities: Array.from(Store.activities.values()),
+      cancellations: Array.from(Store.cancellations.values())
     };
   };
 
@@ -667,6 +864,7 @@
       Store.policies = new Map(obj.policies.map(function (x) { return [x.id, x]; }));
       Store.tasks = new Map((obj.tasks || []).map(function (x) { return [x.id, x]; }));
       Store.activities = new Map((obj.activities || []).map(function (x) { return [x.id, x]; }));
+      Store.cancellations = new Map((obj.cancellations || []).map(function (x) { return [x.id, x]; }));
       Store.months = obj.months || {};
       Store.imports = obj.imports || [];
       Store.mappings = obj.mappings || {};
@@ -676,6 +874,7 @@
         put('policies', Array.from(Store.policies.values())),
         put('tasks', Array.from(Store.tasks.values())),
         put('activities', Array.from(Store.activities.values())),
+        put('cancellations', Array.from(Store.cancellations.values())),
         putMeta('months'), putMeta('imports'), putMeta('mappings'), saveSettings()
       ]);
     }).then(function () { emit('load'); });

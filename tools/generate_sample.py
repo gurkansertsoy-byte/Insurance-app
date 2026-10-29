@@ -410,6 +410,102 @@ add_policy(showcase, 'konut', (2026, 3), new_business=True)
 add_policy(showcase, 'tss', (2026, 6), insured=f'Elif Aydoğdu', new_business=True)
 add_policy(showcase, 'seyahat', (2026, 8), new_business=True)
 
+# a customer with two traffic policies at the same company: a cancellation that names neither car is ambiguous
+twin = new_person('Serdar Bozkurt')
+twin_recs = []
+for ym in [(2026, 2), (2026, 4)]:
+    plate, serial = make_plate(), make_serial()
+    twin.plates.append(plate)
+    r = add_policy(twin, 'trafik', ym, plate, serial, new_business=True)
+    r['insurer'], r['company_text'] = 'Sompo', 'Sompo Sigorta'
+    r['policy_no'] = policy_no('Sompo')
+    r['card'], r['account'], r['cash'] = r['premium'], 0, 0
+    twin_recs.append(r)
+
+# ---------------------------------------------------------------- cancellations (İptal block)
+# Every month sheet ends with ŞİRKET | POLİÇE | SİGORTALI AD SOYAD | KART | CARİ | NAKİT: policies of an earlier
+# month (or the same month) that were cancelled in this month, with the refund per payment type.
+BLOCK_HEADERS = ['ŞİRKET', 'POLİÇE', 'SİGORTALI AD SOYAD', 'KART', 'CARİ', 'NAKİT']
+renewal_sources = {r['renewal_of'] for r in records if r['renewal_of']}
+
+
+def month_last_day(ym):
+    y, m = ym
+    return dt.date(y + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1)
+
+
+def people_key(name):
+    return tr_lower(name).strip()
+
+
+# how many policies of each kind an insured person has: only unambiguous ones are cancelled at random
+kind_count = {}
+for r in records:
+    for n in {people_key(r['insured']), people_key(r['customer_name'])}:
+        kind_count[(n, r['kind'])] = kind_count.get((n, r['kind']), 0) + 1
+
+
+def cancellable(r, ym, same_month=False):
+    key = month_key(*ym)
+    if same_month:
+        if r['month'] != key:
+            return False
+    elif r['month'] >= key:
+        return False
+    return (r['kind'] != 'seyahat' and r['customer_name'] not in ('Kemal Aydoğdu', 'Serdar Bozkurt')
+            and r['customer_name'] not in HOMONYMS and not r['renewal_of'] and r['policy_no'] not in renewal_sources
+            and (r['end'] - TODAY).days > 45 and r['start'] <= month_last_day(ym) and not r.get('cancelled')
+            and kind_count[(people_key(r['insured']), r['kind'])] == 1
+            and kind_count[(people_key(r['customer_name']), r['kind'])] == 1)
+
+
+def refund_split(r, ym):
+    day = random_day_in(*ym)
+    if r['month'] == month_key(*ym):
+        day = max(day, r['start'])
+    share = max(0.05, min(1.0, (r['end'] - day).days / 365))
+    refund = round(r['premium'] * share, 2)
+    paid = r['card'] + r['account'] + r['cash']
+    card = round(refund * r['card'] / paid, 2) if r['card'] else 0
+    account = round(refund * r['account'] / paid, 2) if r['account'] else 0
+    cash = round(refund - card - account, 2) if r['cash'] else 0
+    return card, account, cash
+
+
+cancels = []
+
+
+def cancel_policy(r, ym, policy_text=None, insured=None, expect='auto'):
+    card, account, cash = refund_split(r, ym)
+    r['cancelled'] = True
+    cancels.append({
+        'month': month_key(*ym), 'company': random.choice(INSURERS[r['insurer']]),
+        'policy': policy_text or random.choice([r['policy_name'], tr_upper(r['policy_name'])]),
+        'insured': insured or random.choice([r['insured'], tr_upper(r['insured'])]),
+        'card': card, 'account': account, 'cash': cash, 'target': r, 'expect': expect,
+    })
+
+
+for ym in MONTHS[2:]:
+    pool = [r for r in records if cancellable(r, ym)]
+    for r in random.sample(pool, min(len(pool), random.choice([0, 1, 1, 2, 2, 3]))):
+        cancel_policy(r, ym)
+# the policy number written in the POLİÇE column
+r = random.choice([r for r in records if cancellable(r, (2026, 8))])
+cancel_policy(r, (2026, 8), policy_text=r['policy_no'])
+# a health policy of a family member
+fam = [r for r in records if r['kind'] == 'tss' and r['insured'] != r['customer_name'] and cancellable(r, (2026, 9))]
+if fam:
+    cancel_policy(fam[0], (2026, 9))
+# sold and cancelled in the same month
+cancel_policy(random.choice([r for r in records if cancellable(r, (2026, 7), same_month=True)]), (2026, 7))
+# two equal candidates: the user picks
+cancels.append({'month': '2026-09', 'company': 'SOMPO', 'policy': 'TRAFİK', 'insured': 'SERDAR BOZKURT',
+                'card': 1234.5, 'account': 0, 'cash': 0, 'target': None, 'expect': 'ambiguous'})
+# a policy from before the file: nothing to find
+cancels.append({'month': '2026-05', 'company': 'ANADOLU SİGORTA', 'policy': 'KASKO', 'insured': 'Nuri Tatlı',
+                'card': 0, 'account': 0, 'cash': 3200.0, 'target': None, 'expect': 'none'})
+
 # ---------------------------------------------------------------- sheet layouts
 V1 = ['Poliçe adı', 'Poliçe bitiş tarihi', 'İletişim', 'Meslek', 'Adı soyadı', 'Tc kimlik no', 'Plaka', 'Seri no',
       'Basamak', 'Poliçe numarası', 'Şirket poliçe tutarı', 'Yeni iş', 'Komisyon', 'Açıklama', 'Şirket',
@@ -425,6 +521,11 @@ V4 = ['Branş', 'Sigorta Şirketi', 'Poliçe No', 'Vade Sonu', 'Müşteri Adı S
       'Plaka', 'Ruhsat Seri No', 'Basamak', 'Brüt Prim', 'Komisyon Tutarı', 'Yeni İş', 'Kredi Kartı', 'Cari',
       'Nakit', 'Sigortalı', 'Açıklama', 'Temsilci', 'E-posta']
 
+YELLOW = PatternFill('solid', fgColor='FFFF00')
+BLACK = Side(style='thin', color='000000')
+BOX = Border(top=BLACK, bottom=BLACK, left=BLACK, right=BLACK)
+BLOCK_ROWS = 17
+
 LAYOUTS = {
     '2025-10': dict(sheet='EKİM 2025', headers=V1, yes=('EVET', 'HAYIR')),
     '2025-11': dict(sheet='KASIM 2025', headers=V1, title='KASIM 2025 ÜRETİM LİSTESİ', yes=('EVET', 'HAYIR')),
@@ -432,9 +533,9 @@ LAYOUTS = {
     '2026-01': dict(sheet='OCAK 2026', headers=V1, yes=('EVET', 'HAYIR'), totals=True),
     '2026-02': dict(sheet='ŞUBAT 2026', headers=V3, title='ŞUBAT 2026 - POLİÇE ÜRETİMİ', yes=('YENİ', 'YENİLEME')),
     '2026-03': dict(sheet='MART', headers=V2, yes=('Evet', 'Hayır'), text_values=True),
-    '2026-04': dict(sheet='Nisan 2026', headers=V4, yes=('X', '')),
+    '2026-04': dict(sheet='Nisan 2026', headers=V4, yes=('X', ''), block_gap=3),
     '2026-05': dict(sheet='MAYIS 2026', headers=V1, yes=('EVET', 'HAYIR'), totals=True),
-    '2026-06': dict(sheet='Haziran 2026', headers=V3, yes=('YENİ', 'YENİLEME')),
+    '2026-06': dict(sheet='Haziran 2026', headers=V3, yes=('YENİ', 'YENİLEME'), block_gap=0),
     '2026-07': dict(sheet='Temmuz-2026', headers=V1, yes=('X', ''), blank_rows=True),
     '2026-08': dict(sheet='08.2026', headers=V2, yes=('Evet', '')),
     '2026-09': dict(sheet='EYLÜL 2026', headers=V4, yes=('X', ''), totals=True),
@@ -509,6 +610,30 @@ for (y, m) in MONTHS:
         cell.border = Border(top=THIN, bottom=THIN, left=THIN, right=THIN)
         ws.column_dimensions[get_column_letter(ci)].width = max(12, min(28, len(h) + 4))
     ws.freeze_panes = ws.cell(row=row + 1, column=1)
+    # the İptal block at the end of the page, after an empty column (its first column moves with the table)
+    bcol = len(headers) + 1 + lay.get('block_gap', 1)
+    month_cancels = [c for c in cancels if c['month'] == key]
+    for i, h in enumerate(BLOCK_HEADERS):
+        cell = ws.cell(row=header_row, column=bcol + i, value=h)
+        cell.font = Font(bold=True, color='000000')
+        cell.fill = YELLOW
+        cell.border = BOX
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        ws.column_dimensions[get_column_letter(bcol + i)].width = 22 if i == 2 else 13
+    for j in range(max(BLOCK_ROWS, len(month_cancels))):
+        for i in range(6):
+            ws.cell(row=header_row + 1 + j, column=bcol + i).border = BOX
+        if j < len(month_cancels):
+            c = month_cancels[j]
+            vals = [c['company'], c['policy'], c['insured'], c['card'] or None, c['account'] or None, c['cash'] or None]
+            for i, v in enumerate(vals):
+                cell = ws.cell(row=header_row + 1 + j, column=bcol + i)
+                if i >= 3 and v is not None and lay.get('text_values'):
+                    cell.value = tr_amount_text(v)
+                else:
+                    cell.value = v
+                    if i >= 3 and v is not None:
+                        cell.number_format = '#,##0.00'
     row += 1
     stats = dict(count=0, premium=0.0, commission=0.0, newBusiness=0, card=0.0, account=0.0, cash=0.0)
     text_values = lay.get('text_values', False)
@@ -661,6 +786,19 @@ expected = {
         'premium': round(sum(r['premium'] for r in show_recs), 2),
     },
     'dueIn30Days': len(renewal_window),
+    'cancellations': {
+        'total': len(cancels),
+        'auto': sum(1 for c in cancels if c['expect'] == 'auto'),
+        'ambiguous': sum(1 for c in cancels if c['expect'] == 'ambiguous'),
+        'none': sum(1 for c in cancels if c['expect'] == 'none'),
+        'byMonth': {k: sum(1 for c in cancels if c['month'] == k) for k in sorted({c['month'] for c in cancels})},
+        'refundTotal': round(sum(c['card'] + c['account'] + c['cash'] for c in cancels), 2),
+        'list': [{'month': c['month'], 'insured': c['insured'], 'policy': c['policy'], 'expect': c['expect'],
+                  'policyNo': c['target']['policy_no'] if c['target'] else None,
+                  'refund': round(c['card'] + c['account'] + c['cash'], 2)} for c in cancels],
+    },
+    'totalOutstanding': round(sum(max(0.0, r['account'] - sum(c['account'] for c in cancels if c['target'] is r))
+                                  for r in records), 2),
     'byKind': {k: sum(1 for r in records if r['kind'] == k) for k in POLICY_KINDS},
     'byInsurer': {k: sum(1 for r in records if r['insurer'] == k) for k in INSURERS},
 }
@@ -669,4 +807,4 @@ with open(os.path.join(OUT_DIR, 'expected.json'), 'w', encoding='utf-8') as f:
 
 print(f'wrote {xlsx_path}')
 print(f'{len(records)} policies, {len(cust_policies)} customers, {len(multi_month)} in 2+ months, '
-      f'{renewed_count} renewals inside the file, {len(renewal_window)} due in 30 days')
+      f'{renewed_count} renewals inside the file, {len(renewal_window)} due in 30 days, {len(cancels)} cancellations')
