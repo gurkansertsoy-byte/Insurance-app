@@ -252,7 +252,7 @@
       var oppCard = h('section', { class: 'card', id: 'rep-opps', style: { overflow: 'hidden' } }, h('div', { class: 'card-head' }, h('h2', null, t('dash.opportunities')), h('span', { class: 'sub' }, t('reports.oppSub', { n: F.num(opps.length) }))),
         h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, opps.length ? oppTable.el : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('customer.noOpps'))));
 
-      var summary = h('section', { class: 'card kpis', style: { gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' } },
+      var summary = h('section', { class: 'card kpis k5' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPolicies')), h('div', { class: 'kpi-value', id: 'rep-count' }, F.num(tot.count))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPremium')), h('div', { class: 'kpi-value', id: 'rep-premium', title: F.money(tot.premium) }, F.money0(tot.premium))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCommission')), h('div', { class: 'kpi-value', id: 'rep-commission', title: F.money(tot.commission) }, F.money0(tot.commission))),

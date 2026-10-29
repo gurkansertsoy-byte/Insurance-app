@@ -369,9 +369,13 @@ mark { background: var(--warn-soft); color: inherit; border-radius: 2px; padding
 .callout.good .svg-icon { color: var(--good-ink); }
 
 /* KPI strip: one surface, tiles separated by hairlines */
-.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.kpi { padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; border-left: 1px solid var(--border); color: inherit; text-decoration: none; }
-.kpi:first-child { border-left: 0; }
+/* tiles draw their own left and top divider; the card clips the ones on its outer edge,
+   so any column count works without nth-child rules */
+.kpis { --cols: 6; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); overflow: hidden; }
+.kpis.k4 { --cols: 4; }
+.kpis.k5 { --cols: 5; }
+.kpi { padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); color: inherit; text-decoration: none; }
+a.kpi:focus-visible { outline-offset: -3px; }
 a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .kpi-label { font-size: 12.5px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
 .kpi-label .svg-icon { color: var(--text-3); }
@@ -423,7 +427,7 @@ a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .month-input select:first-child { flex: 1.5 1 0; }
 .month-input select:last-child { flex: 1 1 0; }
 .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; background: var(--surface); height: 38px; }
-.seg button { border: 0; background: transparent; padding: 0 13px; cursor: pointer; color: var(--text-2); font-weight: 500; border-left: 1px solid var(--border); }
+.seg button { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; border: 0; background: transparent; padding: 0 10px; cursor: pointer; color: var(--text-2); font-weight: 500; border-left: 1px solid var(--border); }
 .seg button:first-child { border-left: 0; }
 .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
 .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
@@ -584,9 +588,8 @@ dialog.modal::backdrop { background: var(--scrim); }
 .fact .k { font-size: 11.5px; color: var(--text-3); }
 .fact .v { display: flex; align-items: center; gap: 6px; font-weight: 500; flex-wrap: wrap; }
 .profile-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 420px; }
-.stats-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px solid var(--border); }
-.stats-strip > div { padding: 12px 18px; border-left: 1px solid var(--border); min-width: 0; }
-.stats-strip > div:first-child { border-left: 0; }
+.stats-strip { --cols: 6; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); border-top: 1px solid var(--border); overflow: hidden; }
+.stats-strip > div { padding: 12px 18px; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); min-width: 0; }
 .stats-strip .k { font-size: 12px; color: var(--text-3); }
 .stats-strip .v { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .month-block { border-top: 1px solid var(--border); }
@@ -702,7 +705,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .print-only { display: none; }
 @media print {
   @page { margin: 14mm 12mm; }
-  body { background: #ffffff; color: #000000; font-size: 11pt; }
+  body, .app { background: #ffffff !important; color: #000000; font-size: 11pt; }
   .sidebar, .topbar, .no-print, .toasts, .profile-actions, .tabs, .btn, .icon-btn, .pager { display: none !important; }
   .print-only { display: block !important; }
   .content { padding: 0; max-width: none; }
@@ -714,14 +717,10 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 
 /* ------------------------------------------------------------------ responsive */
 @media (max-width: 1280px) {
-  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .kpi:nth-child(4) { border-left: 0; }
-  .kpi:nth-child(n + 4) { border-top: 1px solid var(--border); }
-  .stats-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .stats-strip > div:nth-child(4) { border-left: 0; }
-  .stats-strip > div:nth-child(n + 4) { border-top: 1px solid var(--border); }
+  .kpis, .stats-strip { --cols: 3; }
 }
 @media (max-width: 1100px) {
+  .kpis.k5 { --cols: 3; }
   .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-3 > .wide { grid-column: 1 / -1; }
   .policy-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1fr) auto; }
@@ -751,17 +750,12 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 @media (max-width: 680px) {
   .topbar { flex-wrap: wrap; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); gap: 8px; }
   .topbar .search { order: 10; flex-basis: 100%; max-width: none; }
+  .topbar-title { flex: 1 1 0; }
   .topbar .new-btn span { display: none; }
   .content { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; gap: 14px; }
-  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi { border-left: 1px solid var(--border); border-top: 1px solid var(--border); padding: 13px 14px; }
-  .kpi:nth-child(odd) { border-left: 0; }
-  .kpi:nth-child(-n + 2) { border-top: 0; }
+  .kpis, .kpis.k4, .kpis.k5, .stats-strip { --cols: 2; }
+  .kpi { padding: 13px 14px; }
   .kpi-value { font-size: 19px; }
-  .stats-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stats-strip > div { border-left: 1px solid var(--border); border-top: 1px solid var(--border); }
-  .stats-strip > div:nth-child(odd) { border-left: 0; }
-  .stats-strip > div:nth-child(-n + 2) { border-top: 0; }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .span-12, .span-9, .span-8, .span-7, .span-6, .span-5 { grid-column: span 2; }
   .span-4, .span-3, .span-2 { grid-column: span 1; }
@@ -3743,7 +3737,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     'tasks.empty.nodate': 'Tarihsiz görev yok', 'tasks.empty.done': 'Tamamlanan görev yok',
     'tasks.markDone': 'Tamamlandı olarak işaretle', 'tasks.doneToast': 'Görev tamamlandı', 'tasks.deleted': 'Görev silindi', 'tasks.saved': 'Görev kaydedildi',
     'tasks.newTitle': 'Yeni görev', 'tasks.editTitle': 'Görevi düzenle', 'tasks.what': 'Yapılacak iş', 'tasks.titlePh': 'Ne yapılacak?', 'tasks.due': 'Tarih',
-    'tasks.errTitle': 'Görev açıklaması gerekli', 'tasks.noDate': 'Tarihsiz', 'tasks.overdueBy': '{n} gün gecikti', 'tasks.tomorrow': 'Yarın',
+    'tasks.errTitle': 'Görev açıklaması gerekli', 'tasks.noDate': 'Tarihsiz', 'tasks.overdueBy': '{n} gün gecikti', 'tasks.tomorrow': 'Yarın', 'tasks.dueToday': 'Bugün',
 
     'reports.sub': 'Dönem, şirket ve branş bazında üretim', 'reports.export': "Raporu Excel'e aktar",
     'reports.monthly': 'Aylık üretim', 'reports.monthlySub': '{n} ay', 'reports.newRen': 'Yeni iş ve yenileme', 'reports.newRenSub': 'Aylara göre poliçe adedi',
@@ -4056,7 +4050,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     'tasks.empty.nodate': 'No undated tasks', 'tasks.empty.done': 'No completed tasks',
     'tasks.markDone': 'Mark as done', 'tasks.doneToast': 'Task completed', 'tasks.deleted': 'Task deleted', 'tasks.saved': 'Task saved',
     'tasks.newTitle': 'New task', 'tasks.editTitle': 'Edit task', 'tasks.what': 'To do', 'tasks.titlePh': 'What needs doing?', 'tasks.due': 'Date',
-    'tasks.errTitle': 'A task description is required', 'tasks.noDate': 'No date', 'tasks.overdueBy': '{n} {n|day|days} overdue', 'tasks.tomorrow': 'Tomorrow',
+    'tasks.errTitle': 'A task description is required', 'tasks.noDate': 'No date', 'tasks.overdueBy': '{n} {n|day|days} overdue', 'tasks.tomorrow': 'Tomorrow', 'tasks.dueToday': 'Today',
 
     'reports.sub': 'Production by period, insurer and line', 'reports.export': 'Export report to Excel',
     'reports.monthly': 'Monthly production', 'reports.monthlySub': '{n} months', 'reports.newRen': 'New business and renewals', 'reports.newRenSub': 'Policies per month',
@@ -5632,7 +5626,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     if (!due) return UI.pill(t('tasks.noDate'), 'plain');
     var d = U.diffDays(U.todayISO(), due);
     if (d < 0) return UI.pill(t('tasks.overdueBy', { n: -d }), 'bad');
-    if (d === 0) return UI.pill(t('days.today'), 'warn');
+    if (d === 0) return UI.pill(t('tasks.dueToday'), 'warn');
     if (d === 1) return UI.pill(t('tasks.tomorrow'), 'info');
     return UI.pill(F.date(due), 'plain');
   };
@@ -6613,7 +6607,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
             h('div', { class: 'span-4' }, mkField('policyNo', t('field.policyNo'), noIn)),
             h('div', { class: 'span-4' }, mkField('startDate', t('field.startDate'), startIn.input, { wrap: startIn, hint: t('form.startHint') })),
             h('div', { class: 'span-4' }, mkField('endDate', t('field.endDate'), endIn.input, { wrap: endIn, labelExtra: quick })),
-            h('div', { class: 'span-4' }, UI.field({ id: 'f-newBusiness', label: t('field.newBusiness'), input: seg })),
+            h('div', { class: 'span-4 span-full-sm' }, UI.field({ id: 'f-newBusiness', label: t('field.newBusiness'), input: seg })),
             h('div', { class: 'span-4' }, mkField('insuredName', t('field.insuredName'), insuredIn, { hint: h('label', { class: 'check small', for: 'f-same' }, sameBox, t('form.sameInsured')) })),
             h('div', { class: 'span-2' }, mkField('issueDate', t('field.issueDate'), issueIn.input, { wrap: issueIn })),
             h('div', { class: 'span-2' }, mkField('agent', t('field.agent'), agentIn), UI.datalist('f-agent-list', sug.agents)))),
@@ -7126,7 +7120,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
           return h('button', { type: 'button', class: 'filter-chip', id: 'bucket-' + b.id, 'aria-pressed': String(vs.bucket === b.id), onClick: function () { vs.bucket = b.id; App.refresh(); } },
             b.label, h('span', { class: 'n' }, F.num(counts[b.id] || 0)));
         }));
-      var summary = h('section', { class: 'card kpis', style: { gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' } },
+      var summary = h('section', { class: 'card kpis k4' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('calendar-clock'), t('renewals.kpiDue', { n: win })), h('div', { class: 'kpi-value', id: 'renewals-due' }, F.num(counts.d30all)),
           h('div', { class: 'kpi-sub' }, t('renewals.kpiDueSub', { p: F.moneyC(U.sum(all.filter(function (p) { var i = d.renewal.get(p.id); return isOpen(i) && i.daysLeft >= 0 && i.daysLeft <= win; }), function (p) { return p.premium; })) }))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('triangle-alert'), t('renewals.b.expired')), h('div', { class: 'kpi-value' }, F.num(counts.expired)), h('div', { class: 'kpi-sub' }, t('renewals.kpiExpiredSub'))),
@@ -7241,7 +7235,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
       var rows = (vs.filter === 'open' ? open : vs.filter === 'paid' ? withAcc.filter(function (p) { return Portfolio.outstanding(p) <= 0; }) : withAcc);
       var q = U.fold(vs.q);
       if (q.length >= 2) rows = rows.filter(function (p) { var c = Store.customers.get(p.customerId); return U.fold([c && c.name, p.policyType, p.policyNo].join(' ')).indexOf(q) >= 0; });
-      var kpis = h('section', { class: 'card kpis', style: { gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' } },
+      var kpis = h('section', { class: 'card kpis k4' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('wallet'), t('collections.kpiOpen')), h('div', { class: 'kpi-value', id: 'collections-total' }, F.money(total)), h('div', { class: 'kpi-sub' }, t('collections.kpiOpenSub', { n: F.num(open.length) }))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('hand-coins'), t('collections.kpiMonth')), h('div', { class: 'kpi-value' }, F.money(thisMonth)), h('div', { class: 'kpi-sub' }, F.month(month))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('receipt'), t('collections.kpiAll')), h('div', { class: 'kpi-value' }, F.money(U.sum(withAcc, function (p) { return p.account; }))), h('div', { class: 'kpi-sub' }, t('collections.kpiAllSub', { n: F.num(withAcc.length) }))),
@@ -7638,7 +7632,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
       var oppCard = h('section', { class: 'card', id: 'rep-opps', style: { overflow: 'hidden' } }, h('div', { class: 'card-head' }, h('h2', null, t('dash.opportunities')), h('span', { class: 'sub' }, t('reports.oppSub', { n: F.num(opps.length) }))),
         h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, opps.length ? oppTable.el : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('customer.noOpps'))));
 
-      var summary = h('section', { class: 'card kpis', style: { gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' } },
+      var summary = h('section', { class: 'card kpis k5' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPolicies')), h('div', { class: 'kpi-value', id: 'rep-count' }, F.num(tot.count))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPremium')), h('div', { class: 'kpi-value', id: 'rep-premium', title: F.money(tot.premium) }, F.money0(tot.premium))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCommission')), h('div', { class: 'kpi-value', id: 'rep-commission', title: F.money(tot.commission) }, F.money0(tot.commission))),

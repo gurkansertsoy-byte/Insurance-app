@@ -85,7 +85,7 @@
           return h('button', { type: 'button', class: 'filter-chip', id: 'bucket-' + b.id, 'aria-pressed': String(vs.bucket === b.id), onClick: function () { vs.bucket = b.id; App.refresh(); } },
             b.label, h('span', { class: 'n' }, F.num(counts[b.id] || 0)));
         }));
-      var summary = h('section', { class: 'card kpis', style: { gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' } },
+      var summary = h('section', { class: 'card kpis k4' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('calendar-clock'), t('renewals.kpiDue', { n: win })), h('div', { class: 'kpi-value', id: 'renewals-due' }, F.num(counts.d30all)),
           h('div', { class: 'kpi-sub' }, t('renewals.kpiDueSub', { p: F.moneyC(U.sum(all.filter(function (p) { var i = d.renewal.get(p.id); return isOpen(i) && i.daysLeft >= 0 && i.daysLeft <= win; }), function (p) { return p.premium; })) }))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('triangle-alert'), t('renewals.b.expired')), h('div', { class: 'kpi-value' }, F.num(counts.expired)), h('div', { class: 'kpi-sub' }, t('renewals.kpiExpiredSub'))),
@@ -200,7 +200,7 @@
       var rows = (vs.filter === 'open' ? open : vs.filter === 'paid' ? withAcc.filter(function (p) { return Portfolio.outstanding(p) <= 0; }) : withAcc);
       var q = U.fold(vs.q);
       if (q.length >= 2) rows = rows.filter(function (p) { var c = Store.customers.get(p.customerId); return U.fold([c && c.name, p.policyType, p.policyNo].join(' ')).indexOf(q) >= 0; });
-      var kpis = h('section', { class: 'card kpis', style: { gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' } },
+      var kpis = h('section', { class: 'card kpis k4' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('wallet'), t('collections.kpiOpen')), h('div', { class: 'kpi-value', id: 'collections-total' }, F.money(total)), h('div', { class: 'kpi-sub' }, t('collections.kpiOpenSub', { n: F.num(open.length) }))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('hand-coins'), t('collections.kpiMonth')), h('div', { class: 'kpi-value' }, F.money(thisMonth)), h('div', { class: 'kpi-sub' }, F.month(month))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('receipt'), t('collections.kpiAll')), h('div', { class: 'kpi-value' }, F.money(U.sum(withAcc, function (p) { return p.account; }))), h('div', { class: 'kpi-sub' }, t('collections.kpiAllSub', { n: F.num(withAcc.length) }))),

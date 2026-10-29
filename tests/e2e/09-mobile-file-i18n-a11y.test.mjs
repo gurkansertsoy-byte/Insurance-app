@@ -29,6 +29,43 @@ test('phone screen: no sideways scrolling, menu drawer, tables become cards', as
   } finally { await env.close(); }
 });
 
+// Runs in the page: lists anything that sticks out of the screen or is cut off inside its box
+// (text wider than a tile, a button pushed to a second line), outside the intended scroll areas.
+function layoutProblems() {
+  const out = [];
+  const vw = document.documentElement.clientWidth;
+  const inScroller = (el) => { for (let a = el.parentElement; a; a = a.parentElement) if (/(auto|scroll)/.test(getComputedStyle(a).overflowX)) return true; return false; };
+  const name = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+  document.querySelectorAll('.topbar *, .content *').forEach((el) => {
+    const b = el.getBoundingClientRect();
+    if (!b.width || !b.height || el.closest('[hidden], dialog, .chart-tip, .sr-only, .date-native') || inScroller(el)) return;
+    const cs = getComputedStyle(el);
+    if (b.right > vw + 0.5 || b.left < -0.5) out.push(name(el) + ' sticks out of the screen');
+    else if (!(el instanceof SVGElement) && cs.display !== 'inline' && cs.textOverflow !== 'ellipsis' && !/(auto|scroll)/.test(cs.overflowX) && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) out.push(`${name(el)} is cut off (${el.clientWidth} < ${el.scrollWidth}px): ${el.textContent.trim().slice(0, 40)}`);
+  });
+  const bar = document.querySelector('.topbar').getBoundingClientRect().top;
+  ['#new-btn', '#lang-btn', '#theme-btn'].forEach((s) => { if (document.querySelector(s).getBoundingClientRect().top > bar + 40) out.push(s + ' wrapped to a second line'); });
+  if (document.documentElement.scrollWidth > vw + 1) out.push('page scrolls sideways');
+  return out.slice(0, 10);
+}
+
+test('phone, tablet and laptop widths: nothing on any page sticks out or gets cut off', async () => {
+  const env = await setup({ viewport: { width: 390, height: 844 }, isMobile: true });
+  try {
+    const { page, base } = env;
+    await loadDemo(page, base);
+    const showId = await store(page, (n) => Array.from(Store.customers.values()).find(c => c.name === n).id, expected.showcase.name);
+    for (const width of [390, 768, 1024]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const p of PAGES.concat(['musteri-' + showId])) {
+        await go(page, p);
+        assert.deepEqual(await page.evaluate(layoutProblems), [], `${width}px wide, #${p}`);
+      }
+    }
+    assert.deepEqual(env.errors, []);
+  } finally { await env.close(); }
+});
+
 test('works when index.html is opened straight from disk (file://)', async () => {
   const env = await setup({ fileMode: true });
   try {

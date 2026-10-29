@@ -393,7 +393,7 @@
             h('div', { class: 'span-4' }, mkField('policyNo', t('field.policyNo'), noIn)),
             h('div', { class: 'span-4' }, mkField('startDate', t('field.startDate'), startIn.input, { wrap: startIn, hint: t('form.startHint') })),
             h('div', { class: 'span-4' }, mkField('endDate', t('field.endDate'), endIn.input, { wrap: endIn, labelExtra: quick })),
-            h('div', { class: 'span-4' }, UI.field({ id: 'f-newBusiness', label: t('field.newBusiness'), input: seg })),
+            h('div', { class: 'span-4 span-full-sm' }, UI.field({ id: 'f-newBusiness', label: t('field.newBusiness'), input: seg })),
             h('div', { class: 'span-4' }, mkField('insuredName', t('field.insuredName'), insuredIn, { hint: h('label', { class: 'check small', for: 'f-same' }, sameBox, t('form.sameInsured')) })),
             h('div', { class: 'span-2' }, mkField('issueDate', t('field.issueDate'), issueIn.input, { wrap: issueIn })),
             h('div', { class: 'span-2' }, mkField('agent', t('field.agent'), agentIn), UI.datalist('f-agent-list', sug.agents)))),

@@ -7,6 +7,7 @@
   "scripts": {
     "sample": "python3 tools/generate_sample.py && node tools/build-sample-js.mjs",
     "build": "node tools/build-single.mjs",
+    "screenshots": "node tools/screenshots.mjs",
     "test": "node --test tests/unit/*.test.js",
     "test:e2e": "node --test --test-concurrency=1 tests/e2e/*.test.mjs",
     "test:all": "npm test && npm run test:e2e",

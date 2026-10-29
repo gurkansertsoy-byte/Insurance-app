@@ -358,9 +358,13 @@ mark { background: var(--warn-soft); color: inherit; border-radius: 2px; padding
 .callout.good .svg-icon { color: var(--good-ink); }
 
 /* KPI strip: one surface, tiles separated by hairlines */
-.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.kpi { padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; border-left: 1px solid var(--border); color: inherit; text-decoration: none; }
-.kpi:first-child { border-left: 0; }
+/* tiles draw their own left and top divider; the card clips the ones on its outer edge,
+   so any column count works without nth-child rules */
+.kpis { --cols: 6; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); overflow: hidden; }
+.kpis.k4 { --cols: 4; }
+.kpis.k5 { --cols: 5; }
+.kpi { padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); color: inherit; text-decoration: none; }
+a.kpi:focus-visible { outline-offset: -3px; }
 a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .kpi-label { font-size: 12.5px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
 .kpi-label .svg-icon { color: var(--text-3); }
@@ -412,7 +416,7 @@ a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .month-input select:first-child { flex: 1.5 1 0; }
 .month-input select:last-child { flex: 1 1 0; }
 .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; background: var(--surface); height: 38px; }
-.seg button { border: 0; background: transparent; padding: 0 13px; cursor: pointer; color: var(--text-2); font-weight: 500; border-left: 1px solid var(--border); }
+.seg button { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; border: 0; background: transparent; padding: 0 10px; cursor: pointer; color: var(--text-2); font-weight: 500; border-left: 1px solid var(--border); }
 .seg button:first-child { border-left: 0; }
 .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
 .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
@@ -573,9 +577,8 @@ dialog.modal::backdrop { background: var(--scrim); }
 .fact .k { font-size: 11.5px; color: var(--text-3); }
 .fact .v { display: flex; align-items: center; gap: 6px; font-weight: 500; flex-wrap: wrap; }
 .profile-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 420px; }
-.stats-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px solid var(--border); }
-.stats-strip > div { padding: 12px 18px; border-left: 1px solid var(--border); min-width: 0; }
-.stats-strip > div:first-child { border-left: 0; }
+.stats-strip { --cols: 6; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); border-top: 1px solid var(--border); overflow: hidden; }
+.stats-strip > div { padding: 12px 18px; box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); min-width: 0; }
 .stats-strip .k { font-size: 12px; color: var(--text-3); }
 .stats-strip .v { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .month-block { border-top: 1px solid var(--border); }
@@ -691,7 +694,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .print-only { display: none; }
 @media print {
   @page { margin: 14mm 12mm; }
-  body { background: #ffffff; color: #000000; font-size: 11pt; }
+  body, .app { background: #ffffff !important; color: #000000; font-size: 11pt; }
   .sidebar, .topbar, .no-print, .toasts, .profile-actions, .tabs, .btn, .icon-btn, .pager { display: none !important; }
   .print-only { display: block !important; }
   .content { padding: 0; max-width: none; }
@@ -703,14 +706,10 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 
 /* ------------------------------------------------------------------ responsive */
 @media (max-width: 1280px) {
-  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .kpi:nth-child(4) { border-left: 0; }
-  .kpi:nth-child(n + 4) { border-top: 1px solid var(--border); }
-  .stats-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .stats-strip > div:nth-child(4) { border-left: 0; }
-  .stats-strip > div:nth-child(n + 4) { border-top: 1px solid var(--border); }
+  .kpis, .stats-strip { --cols: 3; }
 }
 @media (max-width: 1100px) {
+  .kpis.k5 { --cols: 3; }
   .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-3 > .wide { grid-column: 1 / -1; }
   .policy-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1fr) auto; }
@@ -740,17 +739,12 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 @media (max-width: 680px) {
   .topbar { flex-wrap: wrap; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); gap: 8px; }
   .topbar .search { order: 10; flex-basis: 100%; max-width: none; }
+  .topbar-title { flex: 1 1 0; }
   .topbar .new-btn span { display: none; }
   .content { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; gap: 14px; }
-  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi { border-left: 1px solid var(--border); border-top: 1px solid var(--border); padding: 13px 14px; }
-  .kpi:nth-child(odd) { border-left: 0; }
-  .kpi:nth-child(-n + 2) { border-top: 0; }
+  .kpis, .kpis.k4, .kpis.k5, .stats-strip { --cols: 2; }
+  .kpi { padding: 13px 14px; }
   .kpi-value { font-size: 19px; }
-  .stats-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stats-strip > div { border-left: 1px solid var(--border); border-top: 1px solid var(--border); }
-  .stats-strip > div:nth-child(odd) { border-left: 0; }
-  .stats-strip > div:nth-child(-n + 2) { border-top: 0; }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .span-12, .span-9, .span-8, .span-7, .span-6, .span-5 { grid-column: span 2; }
   .span-4, .span-3, .span-2 { grid-column: span 1; }

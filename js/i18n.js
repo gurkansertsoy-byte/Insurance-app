@@ -219,7 +219,7 @@
     'tasks.empty.nodate': 'Tarihsiz görev yok', 'tasks.empty.done': 'Tamamlanan görev yok',
     'tasks.markDone': 'Tamamlandı olarak işaretle', 'tasks.doneToast': 'Görev tamamlandı', 'tasks.deleted': 'Görev silindi', 'tasks.saved': 'Görev kaydedildi',
     'tasks.newTitle': 'Yeni görev', 'tasks.editTitle': 'Görevi düzenle', 'tasks.what': 'Yapılacak iş', 'tasks.titlePh': 'Ne yapılacak?', 'tasks.due': 'Tarih',
-    'tasks.errTitle': 'Görev açıklaması gerekli', 'tasks.noDate': 'Tarihsiz', 'tasks.overdueBy': '{n} gün gecikti', 'tasks.tomorrow': 'Yarın',
+    'tasks.errTitle': 'Görev açıklaması gerekli', 'tasks.noDate': 'Tarihsiz', 'tasks.overdueBy': '{n} gün gecikti', 'tasks.tomorrow': 'Yarın', 'tasks.dueToday': 'Bugün',
 
     'reports.sub': 'Dönem, şirket ve branş bazında üretim', 'reports.export': "Raporu Excel'e aktar",
     'reports.monthly': 'Aylık üretim', 'reports.monthlySub': '{n} ay', 'reports.newRen': 'Yeni iş ve yenileme', 'reports.newRenSub': 'Aylara göre poliçe adedi',
@@ -532,7 +532,7 @@
     'tasks.empty.nodate': 'No undated tasks', 'tasks.empty.done': 'No completed tasks',
     'tasks.markDone': 'Mark as done', 'tasks.doneToast': 'Task completed', 'tasks.deleted': 'Task deleted', 'tasks.saved': 'Task saved',
     'tasks.newTitle': 'New task', 'tasks.editTitle': 'Edit task', 'tasks.what': 'To do', 'tasks.titlePh': 'What needs doing?', 'tasks.due': 'Date',
-    'tasks.errTitle': 'A task description is required', 'tasks.noDate': 'No date', 'tasks.overdueBy': '{n} {n|day|days} overdue', 'tasks.tomorrow': 'Tomorrow',
+    'tasks.errTitle': 'A task description is required', 'tasks.noDate': 'No date', 'tasks.overdueBy': '{n} {n|day|days} overdue', 'tasks.tomorrow': 'Tomorrow', 'tasks.dueToday': 'Today',
 
     'reports.sub': 'Production by period, insurer and line', 'reports.export': 'Export report to Excel',
     'reports.monthly': 'Monthly production', 'reports.monthlySub': '{n} months', 'reports.newRen': 'New business and renewals', 'reports.newRenSub': 'Policies per month',

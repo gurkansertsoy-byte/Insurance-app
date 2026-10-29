@@ -286,7 +286,7 @@
     if (!due) return UI.pill(t('tasks.noDate'), 'plain');
     var d = U.diffDays(U.todayISO(), due);
     if (d < 0) return UI.pill(t('tasks.overdueBy', { n: -d }), 'bad');
-    if (d === 0) return UI.pill(t('days.today'), 'warn');
+    if (d === 0) return UI.pill(t('tasks.dueToday'), 'warn');
     if (d === 1) return UI.pill(t('tasks.tomorrow'), 'info');
     return UI.pill(F.date(due), 'plain');
   };
