@@ -104,9 +104,12 @@
     }
     dlg.appendChild(inner);
     document.body.appendChild(dlg);
+    // the first field takes the focus while the dialog opens (showModal honours autofocus). Never later:
+    // a delayed focus() would pull the focus back from a field the user has already moved to.
+    var first = dlg.querySelector('[autofocus]') || dlg.querySelector('.modal-body input:not([type=hidden]):not(.date-native), .modal-body select, .modal-body textarea');
+    if (first) first.setAttribute('autofocus', '');
     dlg.showModal();
-    var first = dlg.querySelector('[autofocus]') || dlg.querySelector('.modal-body input:not([type=hidden]), .modal-body select, .modal-body textarea');
-    if (first) setTimeout(function () { try { first.focus(); } catch (e) { /* ignore */ } }, 20);
+    if (first && document.activeElement !== first) { try { first.focus(); } catch (e) { /* ignore */ } }
     return { el: dlg, body: body, close: close };
   }
 
@@ -132,7 +135,7 @@
         },
         onClose: function () { if (!answered) resolve(false); }
       });
-      setTimeout(function () { (input || ok).focus(); }, 30);
+      if (!input) ok.focus();
     });
   }
 

@@ -20,7 +20,8 @@ html = html.replace('<link rel="stylesheet" href="css/app.css">', () => `<style>
 const scripts = [];
 html = html.replace(/<script src="([^"]+)"><\/script>\n?/g, (m, src) => { scripts.push(src); return ''; });
 scripts.splice(scripts.indexOf('js/app.js'), 0, 'js/sample-data.js');
-const safe = (js) => js.replace(/<\/script/gi, '<\\/script');
+// U+FFFD (SheetJS code-page tables) is written as the escape \ufffd: same string, and no editor or checker mistakes it for a broken character
+const safe = (js) => js.replace(/<\/script/gi, '<\\/script').replace(/\uFFFD/g, '\\ufffd');
 const bundle = scripts.map((src) => `<script>/* ${src} */\n${safe(read(src))}\n</script>`).join('\n');
 html = html.replace('</body>', () => bundle + '\n</body>');
 html = html.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n<!-- Sigorta Portföy - single-file build. Source: index.html, css/, js/ (see README). -->');

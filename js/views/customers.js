@@ -395,7 +395,7 @@
       var actions = h('div', { class: 'profile-actions no-print' },
         h('a', { class: 'btn btn-primary btn-sm', href: '#yeni-' + c.id, id: 'cust-add-policy' }, icon('plus'), t('customer.addPolicy')),
         h('button', { type: 'button', class: 'btn btn-sm', id: 'cust-edit', onClick: function () { App.editCustomer(c); } }, icon('pencil'), t('common.edit')),
-        h('button', { type: 'button', class: 'btn btn-sm', id: 'cust-note', onClick: function () { vs.tab = 'notes'; App.refresh(); setTimeout(function () { var n = document.getElementById('note-text'); if (n) n.focus(); }, 30); } }, icon('notebook-pen'), t('customer.addNote')),
+        h('button', { type: 'button', class: 'btn btn-sm', id: 'cust-note', onClick: function () { vs.tab = 'notes'; App.refresh(); var n = document.getElementById('note-text'); if (n) n.focus(); } }, icon('notebook-pen'), t('customer.addNote')),
         h('button', { type: 'button', class: 'btn btn-sm', id: 'cust-task', onClick: function () { App.editTask({ customerId: c.id }); } }, icon('list-checks'), t('customer.addTask')),
         !App.embedded ? h('button', { type: 'button', class: 'btn btn-sm', id: 'cust-print', onClick: function () { window.print(); } }, icon('printer'), t('customer.print')) : null,
         h('button', { type: 'button', class: 'btn btn-sm', id: 'cust-export', onClick: function () { App.exportCustomerStatement(c); } }, icon('file-down'), t('common.exportExcel')),

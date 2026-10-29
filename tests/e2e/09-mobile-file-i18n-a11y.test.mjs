@@ -66,6 +66,34 @@ test('phone, tablet and laptop widths: nothing on any page sticks out or gets cu
   } finally { await env.close(); }
 });
 
+test('on a busy computer, opening a dialog never pulls the focus away from the field being typed in', async () => {
+  const env = await setup();
+  try {
+    const { page, base } = env;
+    // short timers run late, as they do when the computer is busy
+    await page.addInitScript(() => { const st = window.setTimeout; window.setTimeout = (fn, ms, ...a) => st(fn, ms > 0 && ms <= 50 ? 400 : ms, ...a); });
+    await loadDemo(page, base);
+    await go(page, 'gorevler');
+    await page.click('button:has-text("Ayrıntılı ekle")');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'task-title', 'the first field is ready for typing');
+    await page.fill('dialog[open] #task-customer', 'kemal ay');
+    await page.waitForTimeout(700);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'task-customer');
+    assert.equal(await page.isVisible('dialog[open] .suggest button'), true, 'customer suggestions stay open');
+    await page.keyboard.press('Escape');
+    await go(page, 'yeni');
+    await page.fill('#f-name', 'Deniz Yıldırım');
+    await page.fill('#f-policyType', 'Kasko');
+    await page.click('#save-new');
+    await page.waitForSelector('.toast:has-text("Kaydedildi")');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'f-name', '"save and new" is ready for the next customer');
+    await page.fill('#f-policyType', 'Trafik');
+    await page.waitForTimeout(700);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'f-policyType');
+    assert.deepEqual(env.errors, []);
+  } finally { await env.close(); }
+});
+
 test('works when index.html is opened straight from disk (file://)', async () => {
   const env = await setup({ fileMode: true });
   try {

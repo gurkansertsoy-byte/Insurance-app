@@ -183,6 +183,8 @@ body {
   text-rendering: optimizeLegibility;
 }
 [hidden] { display: none !important; }
+/* phones with a notch: the strip above the sticky top bar keeps the bar's colour while the page scrolls */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 21; background: var(--surface); }
 a { color: var(--accent-ink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1, h2, h3, h4 { margin: 0; font-weight: 600; text-wrap: balance; letter-spacing: -0.005em; }

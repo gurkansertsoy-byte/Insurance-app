@@ -75,6 +75,13 @@
         return h('section', { class: 'card' }, UI.empty({ icon: 'file-text', title: t('form.notFound'), actions: [h('a', { class: 'btn', href: '#policeler' }, t('nav.policies'))] }));
       }
       return build(d, route);
+    },
+    after: function () {
+      var d = App.viewState.form;
+      if (!d || !d.focus) return;
+      var f = document.getElementById(d.focus);
+      delete d.focus;
+      if (f) f.focus();
     }
   };
 
@@ -116,7 +123,7 @@
             drawCustomer();
           } }, icon('pencil'), t('form.editInfo')),
           route.policyId || route.renewId ? null : h('button', { type: 'button', class: 'btn btn-sm', id: 'cust-change', onClick: function () {
-            d.customerId = null; d.editCustomer = false; CUST_KEYS.forEach(function (k) { d.customer[k] = ''; }); drawCustomer(); setTimeout(function () { inputs.name.focus(); }, 10);
+            d.customerId = null; d.editCustomer = false; CUST_KEYS.forEach(function (k) { d.customer[k] = ''; }); drawCustomer(); inputs.name.focus();
           } }, icon('x'), t('form.change'))));
         return;
       }
@@ -485,16 +492,15 @@
       });
       if (again) {
         var keep = d.keepCustomer;
-        var month = P.month;
-        App.viewState.form = null;
-        if (location.hash !== '#yeni') { location.hash = 'yeni'; }
-        var nd = draftFrom({ month: month });
+        var nd = draftFrom({ month: P.month });
         nd.key = '#yeni';
         nd.keepCustomer = keep;
         if (keep) nd.customerId = res.customer.id;
+        nd.focus = keep ? 'f-policyType' : 'f-name';
         App.viewState.form = nd;
-        App.render();
-        setTimeout(function () { var f = document.getElementById(keep ? 'f-policyType' : 'f-name'); if (f) f.focus(); }, 30);
+        // from another address (#yeni-…, #duzenle-…) the hash change draws the empty form; on #yeni draw it now
+        if (location.hash !== '#yeni') location.hash = 'yeni';
+        else App.render();
       } else {
         App.viewState.form = null;
         App.go('musteri-' + res.customer.id);

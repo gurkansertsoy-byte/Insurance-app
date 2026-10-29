@@ -149,10 +149,13 @@
   }
 
   // ------------------------------------------------------------------ theme & language
+  // a page hosting the app (a preview frame) may have set the theme on <html> before we started;
+  // "device setting" then follows that choice
+  var hostTheme = document.documentElement.getAttribute('data-theme');
   function applyTheme() {
     var th = Store.settings.theme || 'system';
-    if (th === 'system') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', th);
+    if (th === 'system' && !hostTheme) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', th === 'system' ? hostTheme : th);
   }
   App.applyTheme = applyTheme;
 
