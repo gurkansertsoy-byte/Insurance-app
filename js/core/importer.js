@@ -186,7 +186,7 @@
       if (cells.every(function (v) { return isEmpty(plain(v)); })) continue;
       var again = cells.filter(function (v, i) { return typeof v === 'string' && cancelHeaderKind(v) === block.kinds[i]; }).length;
       if (again >= 3) continue;
-      if (isTotalRow(cells)) { res.skipped.cancelTotals = (res.skipped.cancelTotals || 0) + 1; continue; }
+      if (isTotalRow(cells)) { res.skipped.cancelTotals = (res.skipped.cancelTotals || 0) + 1; res.cancelTotalRow = r; continue; }
       out.push({ r: r, cells: cells });
     }
     return out;
@@ -229,7 +229,7 @@
     var res = {
       name: sheetName, index: opts.sheetIndex || 0, headerRow: -1, dataStart: -1, columns: [], rows: [],
       skipped: { empty: 0, totals: 0, repeatedHeader: 0 }, month: { key: '', source: 'none' }, include: false,
-      titleText: '', warnings: [], cancelBlock: null, cancels: [], totalRow: -1, lastDataRow: -1
+      titleText: '', warnings: [], cancelBlock: null, cancels: [], cancelTotalRow: -1, totalRow: -1, lastDataRow: -1
     };
     // the İptal block is read on its own; the main table never sees its columns
     var block = findCancelBlock(allRows);
@@ -573,14 +573,46 @@
     return { records: records, cancels: cancels, skipped: skipped };
   }
 
+  /** Text written in capitals in most rows ("SONGÜL YILDIRIM"): new rows are written the same way. */
+  function mostlyUpper(values) {
+    var n = 0, up = 0;
+    values.forEach(function (v) {
+      v = plain(v);
+      if (typeof v !== 'string' || !/[A-Za-zÇĞİÖŞÜçğıöşü]/.test(v)) return;
+      n++;
+      if (v === U.trUpper(v)) up++;
+    });
+    return n >= 2 && up / n >= 0.8;
+  }
+  /** Numbers kept as numbers (TC kimlik no 12345678901, not text): new rows keep doing so. */
+  function mostlyNumbers(values) {
+    var n = 0, num = 0;
+    values.forEach(function (v) {
+      v = plain(v);
+      if (isEmpty(v)) return;
+      n++;
+      if (typeof v === 'number') num++;
+    });
+    return n >= 2 && num / n >= 0.8;
+  }
+
   /** What the workbook writer needs to put rows back where they belong. */
   function layoutOf(sheet) {
+    var rows = sheet.rows || [], cancels = sheet.cancels || [];
     return {
       headerRow: sheet.headerRow, dataStart: sheet.dataStart, lastDataRow: sheet.lastDataRow, totalRow: sheet.totalRow,
-      columns: sheet.columns.map(function (c) { return { col: c.col, header: c.header, field: c.role === 'custom' || c.role === 'ignored' ? null : c.field, role: c.role }; }),
+      columns: sheet.columns.map(function (c) {
+        var col = { col: c.col, header: c.header, field: c.role === 'custom' || c.role === 'ignored' ? null : c.field, role: c.role };
+        var values = rows.map(function (x) { return x.cells[c.col]; });
+        if (mostlyUpper(values)) col.upper = true;
+        if (mostlyNumbers(values)) col.numeric = true;
+        return col;
+      }),
       block: sheet.cancelBlock ? {
         headerRow: sheet.cancelBlock.headerRow, startCol: sheet.cancelBlock.startCol, kinds: sheet.cancelBlock.kinds.slice(), headers: sheet.cancelBlock.headers.slice(),
-        lastRow: (sheet.cancels || []).reduce(function (m, x) { return Math.max(m, x.r); }, sheet.cancelBlock.headerRow)
+        lastRow: cancels.reduce(function (m, x) { return Math.max(m, x.r); }, sheet.cancelBlock.headerRow),
+        totalRow: sheet.cancelTotalRow != null ? sheet.cancelTotalRow : -1,
+        upper: [0, 1, 2, 3, 4, 5].map(function (i) { return mostlyUpper(cancels.map(function (x) { return x.cells[i]; })); })
       } : null,
       yesNo: sheet.yesNo || null
     };

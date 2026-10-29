@@ -196,7 +196,7 @@
     var res = {
       importId: ctx.importId, added: [], updated: [], unchanged: 0, duplicateRows: 0,
       customersAdded: [], customersUpdated: [], matchedBy: { tc: 0, 'name+phone': 0, 'name+plate': 0, name: 0, 'name-ambiguous': 0 },
-      issues: []
+      issues: [], placed: []
     };
     var updatedCustomers = new Set();
 
@@ -225,6 +225,7 @@
       if (target) {
         claimed.add(target.id);
         if (updateFromImport(target, p, ctx.now)) res.updated.push(target); else res.unchanged++;
+        res.placed.push({ sheet: rec.sheet, row: rec.row, id: target.id });
       } else if (pool.some(function (x) { return claimed.has(x.id) && sameContent(x, p); })) {
         res.duplicateRows++;
         res.issues.push({ sheet: rec.sheet, row: rec.row, type: 'duplicateRow', value: p.policyNo || c.name });
@@ -233,6 +234,7 @@
         pushTo(byKey, key, p);
         claimed.add(p.id);
         res.added.push(p);
+        res.placed.push({ sheet: rec.sheet, row: rec.row, id: p.id });
         if (p.plate) idx.addPlate(c.id, p.plate);
       }
       (rec.issues || []).forEach(function (is) {
