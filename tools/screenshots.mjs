@@ -13,6 +13,8 @@ fs.mkdirSync(DIR, { recursive: true });
 
 async function snap(page, name, opts = {}) {
   if (!opts.keepMouse) await page.mouse.move(1, 1);
+  // messages from earlier steps would cover the picture
+  if (!opts.keepToasts) await page.evaluate(() => document.querySelectorAll('.toast').forEach(t => t.remove()));
   // a whole page is taken as one tall window, so the menu and the sticky bars sit where they belong
   const size = page.viewportSize();
   if (opts.fullPage) await page.setViewportSize({ width: size.width, height: await page.evaluate(() => document.documentElement.scrollHeight) });
@@ -282,21 +284,22 @@ async function sheetPicture(page, bytes, name, o) {
   const body = o.rows.map(r => {
     if (!r) return '<tr class="gaprow"><th>…</th>' + o.cols.map(() => '<td class="gap"></td>').join('') + '</tr>';
     const row = ws.getRow(r);
-    return '<tr' + ((o.mark || []).includes(r) ? ' class="mark"' : '') + '><th>' + r + '</th>' + o.cols.map(c => {
+    const marked = (o.markCells || {})[r] || [];
+    return '<tr' + ((o.mark || []).includes(r) ? ' class="mark"' : marked.length ? ' class="markpart"' : '') + '><th>' + r + '</th>' + o.cols.map(c => {
       if (!c) return '<td class="gap"></td>';
       const cell = row.getCell(c);
-      return '<td style="' + style(cell) + '">' + esc(textOf(cell)) + '</td>';
+      return '<td' + (marked.includes(c) ? ' class="hit"' : '') + ' style="' + style(cell) + '">' + esc(textOf(cell)) + '</td>';
     }).join('') + '</tr>';
   }).join('');
-  const widths = '<colgroup><col style="width:38px">' + o.cols.map(c => '<col style="width:' + (c ? Math.round(Math.min(26, ws.getColumn(c).width || 10) * 7 + 10) : 22) + 'px">').join('') + '</colgroup>';
-  await page.setViewportSize({ width: 1440, height: 900 });
+  const widths = '<colgroup><col style="width:38px">' + o.cols.map(c => '<col style="width:' + (c ? Math.round(Math.max(9, Math.min(24, ws.getColumn(c).width || 10)) * 7 + 12) : 22) + 'px">').join('') + '</colgroup>';
+  await page.setViewportSize({ width: 2400, height: 900 });
   await page.setContent('<!doctype html><meta charset="utf-8"><style>' +
     'body{margin:0;padding:18px;background:#fff;font:13px Calibri,"Segoe UI",Arial,sans-serif;color:#111}' +
     '.cap{font:600 13px system-ui,sans-serif;color:#444;margin:0 0 8px}' +
     'table{border-collapse:collapse;table-layout:fixed}td,th{border:1px solid #d9d9d9;padding:3px 6px;height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
     'th{background:#f3f3f3;color:#555;font-weight:400;text-align:center}td.gap,th.gap{background:#fafafa;color:#999;text-align:center;border-color:#eee}' +
     'tr.gaprow th,tr.gaprow td{height:10px;padding:0;background:#fafafa}tr.mark td{box-shadow:inset 0 0 0 9999px rgba(26,127,100,.13)}' +
-    'tr.mark th{background:#1a7f64;color:#fff;font-weight:700}.tab{display:inline-block;margin-top:10px;padding:4px 14px;border:1px solid #bbb;border-top:0;background:#fff;font:600 12px system-ui;color:#1a7f64}' +
+    'tr.mark th,tr.markpart th{background:#1a7f64;color:#fff;font-weight:700}td.hit{box-shadow:inset 0 0 0 9999px rgba(26,127,100,.16)}#pic{display:inline-block}.tab{display:inline-block;margin-top:10px;padding:4px 14px;border:1px solid #bbb;border-top:0;background:#fff;font:600 12px system-ui;color:#1a7f64}' +
     '</style><div id="pic"><p class="cap">' + esc(o.caption) + '</p><table>' + widths + head + body + '</table><span class="tab">' + esc(name) + '</span></div>');
   await page.locator('#pic').screenshot({ path: path.join(DIR, o.file + '.png') });
   console.log('  ' + o.file + '.png');
@@ -351,7 +354,7 @@ async function excel() {
     await page.click('#save-policy');
     await page.waitForSelector('.toast:has-text("Kaydedildi")');
     await saved(page, w);
-    await snap(page, '33-excel-saved');
+    await snap(page, '33-excel-saved', { keepToasts: true });
 
     // a cancellation from the app goes into the İptal block of its month
     const x = await page.evaluate(() => {
@@ -379,9 +382,10 @@ async function excel() {
     }, x.id);
     const shotPage = await env.context.newPage();
     await sheetPicture(shotPage, bytes, 'Ekim 2026', {
-      file: '35-excel-file-new-row', caption: 'Uretim-2026.xlsx · Ekim 2026 — the new record, written under the last row a moment after Kaydet',
-      cols: [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 15, 0, info.block, info.block + 1, info.block + 2, info.block + 3, info.block + 4, info.block + 5],
-      rows: [1, info.header, info.header + 1, info.header + 2, 0, info.row - 3, info.row - 2, info.row - 1, info.row, info.row + 1], mark: [info.row, info.xrow]
+      file: '35-excel-file-new-row', caption: 'Uretim-2026.xlsx · Ekim 2026, after "Kaydet": the new record under the last row (78), the cancellation in the next empty row of the İptal block',
+      cols: [1, 2, 5, 6, 10, 11, 12, 15, 0, info.block, info.block + 1, info.block + 2, info.block + 3, info.block + 4, info.block + 5],
+      rows: [1, info.header, info.header + 1, info.header + 2, info.header + 3, 0, info.row - 2, info.row - 1, info.row, info.row + 1], mark: [info.row],
+      markCells: { [info.xrow]: [info.block, info.block + 1, info.block + 2, info.block + 3, info.block + 4, info.block + 5] }
     });
     await shotPage.close();
 
