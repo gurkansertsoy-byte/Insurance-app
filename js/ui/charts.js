@@ -55,6 +55,18 @@
 
   function hideTip(el) { var t = el.querySelector('.chart-tip'); if (t) t.hidden = true; }
 
+  // touch screens never send pointerleave after a tap: close tooltips on the next tap elsewhere or on scroll
+  function hideAll(e) {
+    document.querySelectorAll('.chart.hovering').forEach(function (el) {
+      if (e && e.target && el.contains(e.target)) return;
+      el.classList.remove('hovering');
+      el.querySelectorAll('.mark.on').forEach(function (m) { m.classList.remove('on'); });
+      hideTip(el);
+    });
+  }
+  document.addEventListener('pointerdown', hideAll, true);
+  window.addEventListener('scroll', function () { hideAll(null); }, { passive: true });
+
   function roundTop(x, y, w, hgt, r) {
     if (!(hgt > 0)) return '';
     r = Math.min(r, w / 2, hgt);

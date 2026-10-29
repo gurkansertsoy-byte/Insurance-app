@@ -19,7 +19,7 @@ export const TODAY = '2026-10-29T10:00:00+03:00';
 /** Starts the static server and a browser page with a fixed clock (29.10.2026). */
 export async function setup(opts = {}) {
   const server = opts.fileMode ? null : await start(0);
-  const base = opts.fileMode ? 'file://' + path.join(ROOT, 'index.html') : `http://127.0.0.1:${server.address().port}/`;
+  const base = opts.fileMode ? 'file://' + path.join(ROOT, opts.file || 'index.html') : `http://127.0.0.1:${server.address().port}/`;
   const browser = await chromium.launch();
   const context = await browser.newContext({
     viewport: opts.viewport || { width: 1440, height: 900 },

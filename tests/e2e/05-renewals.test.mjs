@@ -78,7 +78,7 @@ test('reminder task from a renewal row', async () => {
   await row.locator('button[title="Hatırlatma görevi oluştur"]').click();
   await page.waitForSelector('dialog[open] #task-title');
   assert.match(await page.inputValue('#task-title'), /Trafik Sigortası yenilemesi 34 KMA 482/);
-  assert.equal(await page.inputValue('#task-due'), '2026-11-14', 'one week before expiry');
+  assert.equal(await page.inputValue('#task-due'), '14.11.2026', 'one week before expiry');
   await page.click('#task-save');
   await page.waitForSelector('dialog[open]', { state: 'detached' });
   assert.equal(await store(page, () => Array.from(Store.tasks.values()).filter(t => /34 KMA 482/.test(t.title)).length), 1);
@@ -97,8 +97,8 @@ test('renewing a policy pre-fills the form and closes the old policy', async () 
   assert.match(await text(page, '#chosen-customer'), /Kemal Aydoğdu/);
   assert.equal(await page.inputValue('#f-policyType'), old.policyType);
   assert.equal(await page.inputValue('#f-plate'), '34 KMA 482');
-  assert.equal(await page.inputValue('#f-startDate'), old.endDate);
-  assert.equal(await page.inputValue('#f-endDate'), '2027-11-21');
+  assert.equal(await page.inputValue('#f-startDate'), old.endDate.split('-').reverse().join('.'));
+  assert.equal(await page.inputValue('#f-endDate'), '21.11.2027');
   assert.equal(await page.$eval('#f-newBusiness button[aria-pressed="true"]', b => b.textContent), 'Yenileme');
   assert.equal(await page.inputValue('#f-policyNo'), '', 'a new policy number is needed');
   await page.fill('#f-premium', '22.000');

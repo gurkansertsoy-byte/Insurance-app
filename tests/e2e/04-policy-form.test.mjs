@@ -42,9 +42,8 @@ test('a new customer with every detail: live checks and helpers', async () => {
   assert.equal(await text(page, '#f-cat'), 'Kasko');
   await page.fill('#f-company', 'Allianz Sigorta');
   await page.fill('#f-policyNo', 'TEST-0001');
-  await page.fill('#f-startDate', '2026-11-05');
-  await page.dispatchEvent('#f-startDate', 'change');
-  assert.equal(await page.inputValue('#f-endDate'), '2027-11-05', 'expiry set to +1 year');
+  await page.fill('#f-startDate', '05.11.2026');
+  assert.equal(await page.inputValue('#f-endDate'), '05.11.2027', 'expiry set to +1 year');
   assert.match(await hint(page, 'endDate'), /gün sonra bitiyor/);
   await page.click('#f-newBusiness button:has-text("Yeni iş")');
   await page.fill('#f-plate', '06abc123');
@@ -86,6 +85,23 @@ test('a new customer with every detail: live checks and helpers', async () => {
   assert.match(await text(page, '#cm-2026-11'), /Kasko/);
   assert.match(await text(page, '#cm-2026-11'), /06 ABC 123/);
   assert.match(await text(page, '#cm-2026-11'), new RegExp(money(25000).replace('.', '\\.')));
+});
+
+test('date fields always use gg.aa.yyyy, whatever the browser language', async () => {
+  const { page } = env;
+  await go(page, 'yeni');
+  await page.click('#f-issueDate');
+  await page.keyboard.type('05032027');
+  assert.equal(await page.inputValue('#f-issueDate'), '05.03.2027', 'dots added while typing');
+  assert.equal(await page.getAttribute('#f-issueDate', 'data-iso'), '2027-03-05', 'read as 5 March, not 3 May');
+  await page.fill('#f-issueDate', '2027-04-09');
+  await page.press('#f-issueDate', 'Tab');
+  assert.equal(await page.inputValue('#f-issueDate'), '09.04.2027', 'ISO is accepted and shown the Turkish way');
+  await page.fill('#f-issueDate', '31.02.2026');
+  await page.press('#f-issueDate', 'Tab');
+  assert.equal(await page.$eval('#f-issueDate', i => i.parentElement.classList.contains('bad')), true, 'impossible date flagged');
+  assert.ok(await page.isVisible('#f-issueDate ~ .date-btn'), 'calendar button');
+  await page.click('#form-cancel');
 });
 
 test('the new month appears and its Excel export carries the extra columns', async () => {

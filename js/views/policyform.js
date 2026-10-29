@@ -127,7 +127,7 @@
       var email = h('input', { id: 'f-email', type: 'email', value: C.email, autocomplete: 'off' });
       var prof = h('input', { id: 'f-profession', value: C.profession, list: 'f-prof-list', autocomplete: 'off' });
       var addr = h('input', { id: 'f-address', value: C.address, autocomplete: 'off' });
-      var birth = h('input', { id: 'f-birthDate', type: 'date', value: C.birthDate });
+      var birth = UI.dateInput('f-birthDate', C.birthDate, function (v) { C.birthDate = v; });
       var sugBox = h('div', { class: 'suggest', hidden: true, id: 'name-suggest', role: 'listbox' });
       var nameWrap = h('div', { style: { position: 'relative' } }, name, sugBox);
       function pick(c) { d.customerId = c.id; d.editCustomer = false; drawCustomer(); updateInsured(); App.refreshTitle(); }
@@ -154,7 +154,7 @@
       tc.addEventListener('input', function () { C.tc = tc.value; App.tcHint(hints.tc, tc.value, d.customerId, d.editCustomer ? null : pick); });
       phone.addEventListener('input', function () { C.phone = phone.value; phoneHint(); });
       phone.addEventListener('blur', function () { var n = U.normalizePhone(phone.value); if (n.length === 10) phone.value = U.formatPhone(n); });
-      [[email, 'email'], [prof, 'profession'], [addr, 'address'], [birth, 'birthDate']].forEach(function (x) { x[0].addEventListener('input', function () { C[x[1]] = x[0].value; }); });
+      [[email, 'email'], [prof, 'profession'], [addr, 'address']].forEach(function (x) { x[0].addEventListener('input', function () { C[x[1]] = x[0].value; }); });
       function phoneHint() {
         var n = U.normalizePhone(phone.value);
         var el = hints.phone;
@@ -171,7 +171,7 @@
         h('div', { class: 'span-4' }, mkField('email', t('field.email'), email)),
         h('div', { class: 'span-4' }, mkField('profession', t('field.profession'), prof), UI.datalist('f-prof-list', sug.professions)),
         h('div', { class: 'span-8' }, mkField('address', t('field.address'), addr)),
-        h('div', { class: 'span-4' }, mkField('birthDate', t('field.birthDate'), birth)),
+        h('div', { class: 'span-4' }, mkField('birthDate', t('field.birthDate'), birth.input, { wrap: birth })),
         d.editCustomer ? h('div', { class: 'span-12' }, h('button', { type: 'button', class: 'btn btn-sm', onClick: function () { d.editCustomer = false; drawCustomer(); } }, icon('x'), t('form.cancelEditInfo'))) : null));
       App.tcHint(hints.tc, tc.value, d.customerId, d.editCustomer ? null : pick);
       phoneHint();
@@ -183,9 +183,9 @@
     var typeIn = h('input', { id: 'f-policyType', value: P.policyType, list: 'f-type-list', autocomplete: 'off', placeholder: t('form.typePh') });
     var companyIn = h('input', { id: 'f-company', value: P.company, list: 'f-company-list', autocomplete: 'off' });
     var noIn = h('input', { id: 'f-policyNo', value: P.policyNo, class: 'mono-input', autocomplete: 'off' });
-    var startIn = h('input', { id: 'f-startDate', type: 'date', value: P.startDate });
-    var endIn = h('input', { id: 'f-endDate', type: 'date', value: P.endDate });
-    var issueIn = h('input', { id: 'f-issueDate', type: 'date', value: P.issueDate });
+    var startIn = UI.dateInput('f-startDate', P.startDate, function (v) { P.startDate = v; autoEnd(); });
+    var endIn = UI.dateInput('f-endDate', P.endDate, function (v) { P.endDate = v; P.endAuto = false; checkDates(); });
+    var issueIn = UI.dateInput('f-issueDate', P.issueDate, function (v) { P.issueDate = v; });
     var insuredIn = h('input', { id: 'f-insuredName', value: P.insuredName, autocomplete: 'off', disabled: P.sameInsured });
     var sameBox = h('input', { type: 'checkbox', id: 'f-same', checked: P.sameInsured });
     var agentIn = h('input', { id: 'f-agent', value: P.agent, list: 'f-agent-list', autocomplete: 'off' });
@@ -206,7 +206,7 @@
     function autoEnd() {
       if (P.startDate && (P.endAuto || !P.endDate)) {
         P.endDate = U.addYears(P.startDate, 1);
-        endIn.value = P.endDate;
+        endIn.setValue(P.endDate, true);
         P.endAuto = true;
       }
       checkDates();
@@ -239,10 +239,6 @@
     bindPolicy('policyType', typeIn, updateCat);
     bindPolicy('company', companyIn);
     bindPolicy('policyNo', noIn, checkNo);
-    startIn.addEventListener('change', function () { P.startDate = startIn.value; autoEnd(); });
-    startIn.addEventListener('input', function () { P.startDate = startIn.value; });
-    endIn.addEventListener('change', function () { P.endDate = endIn.value; P.endAuto = false; checkDates(); });
-    bindPolicy('issueDate', issueIn);
     bindPolicy('agent', agentIn);
     insuredIn.addEventListener('input', function () { P.insuredName = insuredIn.value; });
     sameBox.addEventListener('change', function () {
@@ -266,7 +262,7 @@
           var base = P.startDate || U.todayISO();
           P.endDate = q[0] === 1 ? U.addYears(base, 1) : U.addMonths(base, Math.round(q[0] * 12));
           P.endAuto = false;
-          endIn.value = P.endDate;
+          endIn.setValue(P.endDate, true);
           checkDates();
         } }, t(q[1]));
       }));
@@ -395,11 +391,11 @@
             h('div', { class: 'span-5' }, mkField('policyType', t('field.policyType'), typeIn, { req: true }), UI.datalist('f-type-list', sug.policyTypes)),
             h('div', { class: 'span-4' }, mkField('company', t('field.company'), companyIn), UI.datalist('f-company-list', sug.companies)),
             h('div', { class: 'span-4' }, mkField('policyNo', t('field.policyNo'), noIn)),
-            h('div', { class: 'span-4' }, mkField('startDate', t('field.startDate'), startIn, { hint: t('form.startHint') })),
-            h('div', { class: 'span-4' }, mkField('endDate', t('field.endDate'), endIn, { labelExtra: quick })),
+            h('div', { class: 'span-4' }, mkField('startDate', t('field.startDate'), startIn.input, { wrap: startIn, hint: t('form.startHint') })),
+            h('div', { class: 'span-4' }, mkField('endDate', t('field.endDate'), endIn.input, { wrap: endIn, labelExtra: quick })),
             h('div', { class: 'span-4' }, UI.field({ id: 'f-newBusiness', label: t('field.newBusiness'), input: seg })),
             h('div', { class: 'span-4' }, mkField('insuredName', t('field.insuredName'), insuredIn, { hint: h('label', { class: 'check small', for: 'f-same' }, sameBox, t('form.sameInsured')) })),
-            h('div', { class: 'span-2' }, mkField('issueDate', t('field.issueDate'), issueIn)),
+            h('div', { class: 'span-2' }, mkField('issueDate', t('field.issueDate'), issueIn.input, { wrap: issueIn })),
             h('div', { class: 'span-2' }, mkField('agent', t('field.agent'), agentIn), UI.datalist('f-agent-list', sug.agents)))),
         h('div', { class: 'form-section' },
           h('div', { class: 'form-section-title' }, icon('car'), t('form.secVehicle'), h('span', { class: 'sub' }, t('form.secVehicleSub'))),

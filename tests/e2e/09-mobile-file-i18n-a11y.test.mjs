@@ -43,6 +43,20 @@ test('works when index.html is opened straight from disk (file://)', async () =>
   } finally { await env.close(); }
 });
 
+test('the single-file build (dist/sigorta-portfoy.html) works on its own from disk', async () => {
+  const env = await setup({ fileMode: true, file: 'dist/sigorta-portfoy.html' });
+  try {
+    const { page, base } = env;
+    const requests = [];
+    page.on('request', (r) => { if (!r.url().startsWith('file://') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) requests.push(r.url()); });
+    await loadDemo(page, base);
+    assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies);
+    assert.equal(await page.evaluate(() => document.fonts.check('600 14px "IBM Plex Sans"')), true, 'embedded font');
+    assert.deepEqual(requests, [], 'nothing loaded from the network');
+    assert.deepEqual(env.errors, []);
+  } finally { await env.close(); }
+});
+
 test('English: every page is translated, no text keys leak into the screen', async () => {
   const env = await setup({ locale: 'en-GB' });
   try {
@@ -88,7 +102,7 @@ test('Turkish pages show no raw text keys either; buttons and fields have names'
           if (!name && b.offsetParent) out.push(b.outerHTML.slice(0, 80));
         });
         document.querySelectorAll('input:not([type=hidden]), select, textarea').forEach(i => {
-          if (!i.offsetParent) return;
+          if (!i.offsetParent || i.getAttribute('aria-hidden') === 'true') return;
           const labelled = (i.id && document.querySelector('label[for="' + i.id + '"]')) || i.closest('label') || i.getAttribute('aria-label') || i.getAttribute('title');
           if (!labelled) out.push(i.outerHTML.slice(0, 80));
         });

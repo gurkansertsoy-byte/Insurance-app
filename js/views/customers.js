@@ -59,7 +59,7 @@
       email: h('input', { id: 'ce-email', type: 'email', value: c.email || '', autocomplete: 'off' }),
       profession: h('input', { id: 'ce-prof', value: c.profession || '', list: 'ce-prof-list', autocomplete: 'off' }),
       address: h('input', { id: 'ce-address', value: c.address || '', autocomplete: 'off' }),
-      birthDate: h('input', { id: 'ce-birth', type: 'date', value: c.birthDate || '' }),
+      birthDate: UI.dateInput('ce-birth', c.birthDate || ''),
       tags: h('input', { id: 'ce-tags', value: (c.tags || []).join(', '), placeholder: t('customer.tagsPh'), autocomplete: 'off' }),
       notes: h('textarea', { id: 'ce-notes', rows: 3 }, c.notes || '')
     };
@@ -100,7 +100,7 @@
         var phones = [main].concat(others).filter(function (x, i, a) { return x && a.indexOf(x) === i; });
         var saved = Store.saveCustomer({
           id: c.id, name: f.name.value, tc: f.tc.value, phone: main, phones: phones, email: f.email.value,
-          profession: f.profession.value, address: f.address.value, birthDate: f.birthDate.value,
+          profession: f.profession.value, address: f.address.value, birthDate: f.birthDate.getValue(),
           tags: f.tags.value.split(',').map(U.collapse).filter(Boolean), notes: f.notes.value
         });
         m.close();
@@ -201,7 +201,7 @@
           { key: 'phone', label: t('field.phone'), render: function (c) { return App.phoneLinks(c.phone); } },
           { key: 'count', label: t('customers.colPolicies'), align: 'r', sort: function (c) { return Store.summary(c.id).count; }, render: function (c) {
             var s = Store.summary(c.id);
-            return h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' } }, h('strong', null, F.num(s.count)), App.catChips(s.cats));
+            return h('div', { class: 'cellstack', style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' } }, h('strong', null, F.num(s.count)), App.catChips(s.cats));
           } },
           { key: 'months', label: t('customers.colMonths'), sort: function (c) { return Store.summary(c.id).months.length; }, render: function (c) { return App.monthChips(Store.summary(c.id).months); } },
           { key: 'premium', label: t('customers.colPremium'), align: 'r', sort: function (c) { return Store.summary(c.id).premium; }, render: function (c) { return F.money(Store.summary(c.id).premium); } },

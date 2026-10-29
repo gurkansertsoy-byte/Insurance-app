@@ -38,7 +38,7 @@
     'common.customer': 'Müşteri', 'common.amount': 'Tutar', 'common.date': 'Tarih', 'common.notes': 'Not',
     'common.total': 'Toplam', 'common.today': 'bugün', 'common.never': 'hiç alınmadı', 'common.unknown': 'Belirtilmemiş',
     'common.viewAll': 'Tümünü gör', 'common.newBusiness': 'Yeni iş', 'common.renewal': 'Yenileme',
-    'common.year': 'Yıl', 'common.typeToConfirm': 'Onaylamak için "{text}" yazın',
+    'common.year': 'Yıl', 'date.placeholder': 'gg.aa.yyyy', 'date.pick': 'Takvimden seç', 'common.typeToConfirm': 'Onaylamak için "{text}" yazın',
 
     'field.policyType': 'Poliçe adı', 'field.endDate': 'Poliçe bitiş tarihi', 'field.phone': 'İletişim', 'field.profession': 'Meslek',
     'field.name': 'Adı soyadı', 'field.tc': 'TC kimlik no', 'field.plate': 'Plaka', 'field.serialNo': 'Seri no', 'field.step': 'Basamak',
@@ -171,7 +171,7 @@
 
     'policies.sub': '{n} poliçe kaydı', 'policies.count': '{n} poliçe', 'policies.searchPh': 'Müşteri, poliçe no, plaka, seri no…',
     'policies.anyMonth': 'Tüm aylar', 'policies.nbAll': 'Yeni iş + yenileme', 'policies.payAll': 'Tüm ödeme şekilleri', 'policies.stateAll': 'Tüm durumlar',
-    'policies.colPolicy': 'Poliçe / şirket', 'policies.payment': 'Ödeme', 'policies.footer': '{n} poliçe · {m} yeni iş', 'policies.payLine': 'Kart {card} · Nakit {cash} · Cari {account}',
+    'policies.colPolicy': 'Poliçe / şirket', 'policies.colMoney': 'Prim / komisyon', 'policies.payment': 'Ödeme', 'policies.footer': '{n} poliçe · {m} yeni iş', 'policies.payLine': 'Kart {card} · Nakit {cash} · Cari {account}',
     'policies.emptyTitle': 'Henüz poliçe yok', 'policies.emptyText': 'Excel dosyanızı aktarın ya da ilk poliçeyi elle girin.', 'policies.noMatch': 'Eşleşen poliçe yok',
     'pay.cash': 'Nakit', 'pay.card': 'Kredi kartı', 'pay.transfer': 'Havale / EFT', 'pay.account': 'Cari',
     'pay.short.card': 'Kart', 'pay.short.cash': 'Nakit', 'pay.short.account': 'Cari',
@@ -354,7 +354,7 @@
     'common.customer': 'Customer', 'common.amount': 'Amount', 'common.date': 'Date', 'common.notes': 'Note',
     'common.total': 'Total', 'common.today': 'today', 'common.never': 'never', 'common.unknown': 'Not specified',
     'common.viewAll': 'View all', 'common.newBusiness': 'New business', 'common.renewal': 'Renewal',
-    'common.year': 'Year', 'common.typeToConfirm': 'Type "{text}" to confirm',
+    'common.year': 'Year', 'date.placeholder': 'dd.mm.yyyy', 'date.pick': 'Pick from the calendar', 'common.typeToConfirm': 'Type "{text}" to confirm',
 
     'field.policyType': 'Policy name', 'field.endDate': 'Expiry date', 'field.phone': 'Contact', 'field.profession': 'Occupation',
     'field.name': 'Full name', 'field.tc': 'National ID (TC)', 'field.plate': 'Plate', 'field.serialNo': 'Registration serial', 'field.step': 'No-claims step',
@@ -484,7 +484,7 @@
 
     'policies.sub': '{n} policy records', 'policies.count': '{n} {n|policy|policies}', 'policies.searchPh': 'Customer, policy no, plate, serial…',
     'policies.anyMonth': 'All months', 'policies.nbAll': 'New + renewal', 'policies.payAll': 'All payment methods', 'policies.stateAll': 'All statuses',
-    'policies.colPolicy': 'Policy / insurer', 'policies.payment': 'Payment', 'policies.footer': '{n} policies · {m} new business', 'policies.payLine': 'Card {card} · Cash {cash} · On account {account}',
+    'policies.colPolicy': 'Policy / insurer', 'policies.colMoney': 'Premium / commission', 'policies.payment': 'Payment', 'policies.footer': '{n} policies · {m} new business', 'policies.payLine': 'Card {card} · Cash {cash} · On account {account}',
     'policies.emptyTitle': 'No policies yet', 'policies.emptyText': 'Import your Excel file or enter the first policy by hand.', 'policies.noMatch': 'No matching policies',
     'pay.cash': 'Cash', 'pay.card': 'Credit card', 'pay.transfer': 'Bank transfer', 'pay.account': 'On account',
     'pay.short.card': 'Card', 'pay.short.cash': 'Cash', 'pay.short.account': 'Cari',

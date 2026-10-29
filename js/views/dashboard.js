@@ -138,7 +138,7 @@
         actions: seg,
         chart: function () {
           return Charts.columns({
-            ariaLabel: t('dash.monthly'), height: 300,
+            ariaLabel: t('dash.monthly'), height: 380,
             data: series.map(function (s) {
               return {
                 key: s.key, label: F.month(s.key), short: F.month(s.key, true), value: s[metric],

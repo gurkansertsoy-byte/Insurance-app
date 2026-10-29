@@ -329,6 +329,55 @@
     return h('div', { class: 'month-input', style: opts.style || null }, mSel, ySel);
   }
 
+  /**
+   * Date field that always reads and writes gg.aa.yyyy (the native picker follows the browser language,
+   * so an English Chrome would read 05.03.2027 as 3 May). Dots are added while typing; ISO and 5/3/2027 work too.
+   * Returns a wrapper with .input, .getValue() -> 'yyyy-mm-dd' | '' and .setValue(iso, silent).
+   */
+  function dateInput(id, iso, onChange, attrs) {
+    var input = h('input', Object.assign({ id: id, type: 'text', inputmode: 'numeric', autocomplete: 'off', maxlength: 10, placeholder: t('date.placeholder'), class: 'date-text' }, attrs || {}));
+    var picker = h('input', { type: 'date', tabindex: '-1', 'aria-hidden': 'true', class: 'date-native' });
+    var btn = h('button', { type: 'button', class: 'date-btn', tabindex: '-1', title: t('date.pick'), 'aria-label': t('date.pick') }, icon('calendar'));
+    var wrap = h('div', { class: 'date-input' }, input, btn, picker);
+    var current = '';
+    function emit(v) { if (v !== current) { current = v; if (onChange) onChange(v); } }
+    function show(v) { input.value = v ? U.fmtDate(v, 'tr') : ''; picker.value = v || ''; input.dataset.iso = v || ''; }
+    function setValue(v, silent) { show(v); wrap.classList.remove('bad'); if (silent) current = v || ''; else emit(v || ''); }
+    function complete(s) { return /^\d{1,2}\.\d{1,2}\.\d{4}$/.test(s) || /^\d{4}-\d{2}-\d{2}$/.test(s) || /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s); }
+    input.addEventListener('input', function (e) {
+      var raw = input.value;
+      var deleting = e && e.inputType && e.inputType.indexOf('delete') === 0;
+      if (!deleting) {
+        if (/^\d{2}$/.test(raw) || /^\d{1,2}\.\d{2}$/.test(raw)) raw += '.';
+        else if (/^\d{5,8}$/.test(raw)) raw = raw.slice(0, 2) + '.' + raw.slice(2, 4) + '.' + raw.slice(4);
+        if (raw !== input.value) input.value = raw;
+      }
+      wrap.classList.remove('bad');
+      if (!raw.trim()) { input.dataset.iso = ''; emit(''); return; }
+      if (complete(raw)) {
+        var v = U.parseDate(raw);
+        if (v) { input.dataset.iso = v; picker.value = v; emit(v); }
+      }
+    });
+    function commit() {
+      var raw = U.collapse(input.value);
+      if (!raw) { setValue('', false); return; }
+      var v = U.parseDate(raw);
+      if (v) setValue(v, false); else wrap.classList.add('bad');
+    }
+    input.addEventListener('change', commit);
+    input.addEventListener('blur', commit);
+    picker.addEventListener('change', function () { setValue(picker.value, false); input.focus(); });
+    btn.addEventListener('click', function () {
+      try { picker.showPicker(); } catch (err) { picker.focus(); picker.click(); }
+    });
+    setValue(iso || '', true);
+    wrap.input = input;
+    wrap.getValue = function () { return input.dataset.iso || ''; };
+    wrap.setValue = setValue;
+    return wrap;
+  }
+
   function datalist(id, values) {
     return h('datalist', { id: id }, values.map(function (v) { return h('option', { value: v }); }));
   }
@@ -389,7 +438,7 @@
   root.UI = {
     h: h, append: append, clear: clear, items: items, icon: icon, F: F, modal: modal, confirm: confirmDialog, toast: toast,
     TableView: TableView, pill: pill, plate: plate, idBadge: idBadge, initials: initials, empty: empty,
-    field: field, select: select, monthInput: monthInput, datalist: datalist, copyText: copyText, highlight: highlight, download: download,
+    field: field, select: select, monthInput: monthInput, dateInput: dateInput, datalist: datalist, copyText: copyText, highlight: highlight, download: download,
     readFile: readFile, t: t
   };
 })(typeof self !== 'undefined' ? self : this);

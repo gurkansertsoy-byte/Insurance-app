@@ -61,8 +61,8 @@
           h('span', { class: 'sub' }, p.insuredName && c && U.fold(p.insuredName) !== U.fold(c.name) ? t('customer.insured') + ': ' + p.insuredName : (c && c.profession) || ' '));
       } },
       { key: 'policyType', label: t('policies.colPolicy'), sort: true, render: function (p) {
-        return h('div', { style: { minWidth: '140px' } }, h('div', { class: 'row tight', style: { flexWrap: 'nowrap' } }, h('span', null, p.policyType || '—'), App.newBizTag(p.newBusiness)),
-          h('div', { class: 'small muted nowrap' }, Store.companyLabel(p.company) || '—'));
+        return h('div', null, h('div', { class: 'nowrap' }, p.policyType || '—'),
+          h('div', { class: 'row tight small muted', style: { flexWrap: 'nowrap', marginTop: '2px' } }, h('span', { class: 'nowrap' }, Store.companyLabel(p.company) || '—'), App.newBizTag(p.newBusiness)));
       } },
       { key: 'policyNo', label: t('field.policyNo'), sort: true, render: function (p) { return p.policyNo ? h('span', { class: 'mono small nowrap' }, UI.highlight(p.policyNo, vs.q || '')) : h('span', { class: 'muted' }, '—'); } },
       { key: 'plate', label: t('field.plate'), sort: function (p) { return p.plate ? U.plateKey(p.plate) : ''; }, render: function (p) { return p.plate ? UI.plate(p.plate) : h('span', { class: 'muted' }, '—'); } },
@@ -70,8 +70,10 @@
         var info = Store.derived().renewal.get(p.id);
         return h('div', { style: { display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' } }, h('span', { class: 'num nowrap' }, p.endDate ? F.date(p.endDate) : '—'), App.statePill(info, p));
       } },
-      { key: 'premium', label: t('field.premium'), align: 'r', sort: true, render: function (p) { return p.premium != null ? F.money(p.premium) : '—'; } },
-      { key: 'commission', label: t('field.commission'), align: 'r', sort: true, render: function (p) { return p.commission != null ? F.money(p.commission) : '—'; } },
+      { key: 'premium', label: t('policies.colMoney'), align: 'r', sort: true, render: function (p) {
+        return h('div', null, h('div', { style: { fontWeight: 600 } }, p.premium != null ? F.money(p.premium) : '—'),
+          h('div', { class: 'small muted' }, p.commission != null ? t('customer.commShort', { v: F.money(p.commission) }) : '\u00a0'));
+      } },
       { key: 'pay', label: t('policies.payment'), render: function (p) { return App.payChips(p); } },
       { key: 'actions', label: '', cls: 'actions-cell', render: function (p) { return App.policyActions(p); } });
     return cols;
@@ -83,8 +85,7 @@
     var lead = opts && opts.noMonth ? 0 : 1;
     cells.push(h('td', { class: 'full', colspan: 5 + lead }, t('policies.footer', { n: F.num(tot.count), m: F.num(tot.newCount) }),
       h('span', { class: 'small muted', style: { fontWeight: 400, marginLeft: '10px' } }, t('policies.payLine', { card: F.moneyC(tot.card), cash: F.moneyC(tot.cash), account: F.moneyC(tot.account) }))));
-    cells.push(h('td', { class: 'r nowrap', 'data-label': t('field.premium') }, F.money(tot.premium)));
-    cells.push(h('td', { class: 'r nowrap', 'data-label': t('field.commission') }, F.money(tot.commission)));
+    cells.push(h('td', { class: 'r nowrap', 'data-label': t('policies.colMoney') }, h('div', null, F.money(tot.premium)), h('div', { class: 'small muted', style: { fontWeight: 400 } }, t('customer.commShort', { v: F.money(tot.commission) }))));
     cells.push(h('td', { colspan: 2 }));
     return cells;
   }
@@ -103,6 +104,7 @@
         sortKey: vs.sortKey, sortDir: vs.sortDir, pageSize: Number(Store.settings.pageSize) || 50,
         onSort: function (k, dir) { vs.sortKey = k; vs.sortDir = dir; },
         columns: policyColumns(vs),
+        onRowClick: function (p) { App.go('musteri-' + p.customerId); },
         footer: function (rows) { return totalsFooter(rows); },
         empty: UI.empty({ icon: 'search', title: t('policies.noMatch'), text: t('customers.noMatchText') })
       });

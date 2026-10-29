@@ -156,7 +156,7 @@
     var rem = Portfolio.outstanding(p);
     var c = Store.customers.get(p.customerId);
     var amount = h('input', { id: 'pay-amount', class: 'num', inputmode: 'decimal', value: U.fmtNumber(rem > 0 ? rem : 0, window.I18N.lang, 2), autocomplete: 'off', style: { textAlign: 'right' } });
-    var date = h('input', { id: 'pay-date', type: 'date', value: U.todayISO() });
+    var date = UI.dateInput('pay-date', U.todayISO());
     var method = UI.select('pay-method', ['cash', 'card', 'transfer'].map(function (x) { return { value: x, label: t('pay.' + x) }; }), 'cash');
     var note = h('input', { id: 'pay-note', autocomplete: 'off' });
     var err = h('div', { class: 'hint' });
@@ -174,7 +174,7 @@
       onSubmit: function () {
         var v = U.parseNumber(amount.value);
         if (!(v > 0)) { err.className = 'hint bad'; err.textContent = t('collections.errAmount'); amount.focus(); return; }
-        Store.addPayment(p.id, { amount: v, date: date.value || U.todayISO(), method: method.value, note: note.value });
+        Store.addPayment(p.id, { amount: v, date: date.getValue() || U.todayISO(), method: method.value, note: note.value });
         m.close();
         UI.toast(t('collections.saved', { v: F.money(v) }));
       }
@@ -263,7 +263,7 @@
     var existing = init.id ? Store.tasks.get(init.id) : null;
     var v = Object.assign({ title: '', due: U.addDays(U.todayISO(), 1), customerId: '', note: '' }, existing || {}, init);
     var title = h('input', { id: 'task-title', value: v.title, autocomplete: 'off', placeholder: t('tasks.titlePh') });
-    var due = h('input', { id: 'task-due', type: 'date', value: v.due || '' });
+    var due = UI.dateInput('task-due', v.due || '');
     var note = h('textarea', { id: 'task-note', rows: 2 }, v.note || '');
     var custId = v.customerId || '';
     var custInput = h('input', { id: 'task-customer', autocomplete: 'off', placeholder: t('form.searchCustomer'), value: custId && Store.customers.get(custId) ? Store.customers.get(custId).name : '' });
@@ -289,7 +289,7 @@
       foot: [h('button', { type: 'button', class: 'btn', onClick: function () { m.close(); } }, t('common.cancel')), h('button', { type: 'submit', class: 'btn btn-primary', id: 'task-save' }, icon('save'), t('common.save'))],
       onSubmit: function () {
         if (!U.collapse(title.value)) { err.className = 'hint bad'; err.textContent = t('tasks.errTitle'); title.focus(); return; }
-        Store.saveTask({ id: existing ? existing.id : null, title: U.collapse(title.value), due: due.value, customerId: custId || (custInput.value ? v.customerId : ''), policyId: v.policyId || '', note: note.value.trim() });
+        Store.saveTask({ id: existing ? existing.id : null, title: U.collapse(title.value), due: due.getValue(), customerId: custId || (custInput.value ? v.customerId : ''), policyId: v.policyId || '', note: note.value.trim() });
         m.close();
         UI.toast(t('tasks.saved'));
       }
@@ -313,11 +313,11 @@
       Object.keys(groups).forEach(function (k) { groups[k].sort(function (a, b) { return k === 'done' ? (b.doneAt || 0) - (a.doneAt || 0) : U.cmp(a.due, b.due) || (a.createdAt - b.createdAt); }); });
       if (vs.tab === 'today' && !groups.today.length && groups.overdue.length) vs.tab = 'overdue';
       var quickTitle = h('input', { id: 'quick-task', class: 'input', placeholder: t('tasks.quickPh'), 'aria-label': t('tasks.what'), autocomplete: 'off', style: { flex: '1 1 260px', width: 'auto' } });
-      var quickDue = h('input', { id: 'quick-due', class: 'input', type: 'date', value: today, 'aria-label': t('tasks.due'), style: { width: 'auto' } });
+      var quickDue = UI.dateInput('quick-due', today, null, { class: 'input date-text', 'aria-label': t('tasks.due') });
       var quick = h('form', { class: 'card', onSubmit: function (e) {
         e.preventDefault();
         if (!U.collapse(quickTitle.value)) { quickTitle.focus(); return; }
-        Store.saveTask({ title: U.collapse(quickTitle.value), due: quickDue.value });
+        Store.saveTask({ title: U.collapse(quickTitle.value), due: quickDue.getValue() });
         UI.toast(t('tasks.saved'));
       } }, h('div', { class: 'card-body row' }, icon('plus'), quickTitle, quickDue,
         h('button', { type: 'submit', class: 'btn btn-primary', id: 'quick-add' }, t('common.add')),

@@ -399,6 +399,14 @@ a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .input-affix.left input { padding-left: 28px !important; padding-right: 11px !important; }
 .input-affix.left .affix { left: 11px; right: auto; }
 .mono-input { font-family: var(--mono) !important; letter-spacing: 0.02em; }
+.date-input { position: relative; display: flex; min-width: 0; }
+.date-input input.date-text { padding-right: 38px !important; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.date-input .date-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--text-3); cursor: pointer; display: grid; place-items: center; }
+.date-input .date-btn:hover { background: var(--surface-3); color: var(--text); }
+.date-input .date-btn .svg-icon { font-size: 16px; }
+.date-input input.date-native { position: absolute !important; right: 0; bottom: 0; width: 1px !important; height: 1px !important; min-width: 0 !important; padding: 0 !important; border: 0 !important; opacity: 0; pointer-events: none; }
+.date-input.bad input.date-text { border-color: var(--bad) !important; }
+.toolbar .date-input, .row > .date-input { flex: none; width: 160px; }
 .month-input { display: flex; gap: 6px; min-width: 0; }
 .month-input select { min-width: 0; width: auto; }
 .month-input select:first-child { flex: 1.5 1 0; }
@@ -760,6 +768,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
   table.data.responsive td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: var(--text-3); font-weight: 400; margin-bottom: 1px; }
   table.data.responsive td.name-cell, table.data.responsive td.full { grid-column: 1 / -1; }
   table.data.responsive td.name-cell::before { display: none; }
+  table.data.responsive .cellstack { align-items: flex-start !important; }
   table.data.responsive td.actions-cell { grid-column: 1 / -1; text-align: left; width: auto; }
   table.data.responsive tbody tr:hover td { background: transparent; }
   table.data.responsive tfoot tr { background: var(--surface-2); }
