@@ -961,6 +961,74 @@
     return link;
   }
 
+  // ------------------------------------------------------------------ the file changed outside the app
+  /** What the app makes of a row of the file (an import record), column by column, as policyValues does. */
+  function recordValues(rec, layout) {
+    var f = rec.fields || {};
+    var p = Object.assign({}, f, { extras: rec.extras || {} });
+    var c = { name: f.name || '', tc: f.tc || '', phone: f.phone || '', profession: f.profession || '', email: f.email || '', address: f.address || '', birthDate: f.birthDate || '' };
+    return policyValues(p, c, layout);
+  }
+
+  /** Values keyed by column header instead of position, so a column moved in Excel still compares with itself. */
+  function keyed(vals, layout) {
+    var seen = {}, out = {};
+    layout.columns.forEach(function (c) {
+      var k = U.fold(String(c.header || '')).replace(/\s+/g, ' ');
+      seen[k] = (seen[k] || 0) + 1;
+      if (seen[k] > 1) k += '#' + seen[k];
+      if (c.role === 'ignored') return;
+      var v = vals ? vals[c.col] : null;
+      out[k] = JSON.stringify(v == null ? null : v);
+    });
+    return out;
+  }
+  function keyedCancel(vals, block) {
+    var out = {};
+    (block.kinds || BLOCK_KINDS).forEach(function (k, i) { out[k] = JSON.stringify(vals && vals[i] != null ? vals[i] : null); });
+    return out;
+  }
+  /** Share of the filled-in cells two rows agree on (0…1). */
+  function similarity(a, b) {
+    var n = 0, hit = 0;
+    for (var k in a) {
+      if (!Object.prototype.hasOwnProperty.call(b, k)) continue;
+      if (a[k] === 'null' && b[k] === 'null') continue;
+      n++;
+      if (a[k] === b[k]) hit++;
+    }
+    return n ? hit / n : 0;
+  }
+
+  /**
+   * Lines up two lists of rows in order (the rows the link knows, the rows the file has now) so that the pairs
+   * agree on as many cells as possible: rows added, removed or edited in Excel in between still line up.
+   * a, b: [{ vals: keyed }]. Returns [[indexInA, indexInB, score]], every score >= min.
+   */
+  function align(a, b, min) {
+    var n = a.length, m = b.length, i, k;
+    var S = [], dp = [];
+    for (i = 0; i < n; i++) { var row = new Float64Array(m); for (k = 0; k < m; k++) row[k] = similarity(a[i].vals, b[k].vals); S.push(row); }
+    for (i = 0; i <= n; i++) dp.push(new Float64Array(m + 1));
+    for (i = 1; i <= n; i++) {
+      for (k = 1; k <= m; k++) {
+        var best = Math.max(dp[i - 1][k], dp[i][k - 1]);
+        var sc = S[i - 1][k - 1];
+        if (sc >= min && dp[i - 1][k - 1] + sc > best) best = dp[i - 1][k - 1] + sc;
+        dp[i][k] = best;
+      }
+    }
+    var out = [];
+    i = n; k = m;
+    while (i > 0 && k > 0) {
+      var s2 = S[i - 1][k - 1];
+      if (s2 >= min && dp[i][k] === dp[i - 1][k - 1] + s2) { out.push([i - 1, k - 1, s2]); i--; k--; }
+      else if (dp[i][k] === dp[i - 1][k]) i--;
+      else k--;
+    }
+    return out.reverse();
+  }
+
   /** The first page of a workbook the app starts itself, for a month that has nothing yet. */
   function startSheet(wb, month, meta) {
     var layout = defaultLayout(meta);
@@ -970,7 +1038,8 @@
   }
 
   return {
-    createLink: createLink, buildPlan: buildPlan, apply: apply, startSheet: startSheet, policyValues: policyValues, cancelValues: cancelValues,
+    createLink: createLink, buildPlan: buildPlan, apply: apply, startSheet: startSheet,
+    recordValues: recordValues, keyed: keyed, keyedCancel: keyedCancel, similarity: similarity, align: align, policyValues: policyValues, cancelValues: cancelValues,
     shiftFormula: shiftFormula, eachRef: eachRef, renameMonth: renameMonth, newSheetName: newSheetName, defaultLayout: defaultLayout,
     BLOCK_KINDS: BLOCK_KINDS, BLOCK_HEADERS: BLOCK_HEADERS
   };

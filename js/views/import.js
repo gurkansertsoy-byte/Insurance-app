@@ -246,7 +246,9 @@
         var built = Importer.buildRecords(a, { tidyNames: vs.tidyNames, lang: lang() });
         var saveMap = {};
         if (vs.remember) Object.keys(vs.overrides).forEach(function (k) { saveMap[k] = vs.overrides[k]; });
-        Store.importRecords(built.records, a, { mode: vs.mode, fileName: vs.file.name, saveMappings: saveMap, cancels: built.cancels }).then(function (r) {
+        // the linked file again (changed in Excel): its rows are lined up with the last save
+        var hints = vs.mode === 'replace' ? null : FileLink.hintsFor(vs.file.name, a, built);
+        Store.importRecords(built.records, a, { mode: vs.mode, fileName: vs.file.name, saveMappings: saveMap, cancels: built.cancels, hints: hints }).then(function (r) {
           vs.step = 'done';
           vs.result = r.result;
           vs.entry = r.entry;
@@ -258,7 +260,7 @@
             return FileLink.linkImport({
               name: vs.file.name, handle: FileLink.canWrite() ? vs.handle : null, lastModified: vs.lastModified, size: bytes.byteLength,
               bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), analysis: a,
-              placed: r.result.placed, cancelsPlaced: r.result.cancelsPlaced, importId: r.entry.id
+              placed: r.result.placed, cancelsPlaced: r.result.cancelsPlaced, importId: r.entry.id, hints: hints
             });
           }).then(function () { vs.linked = true; }, function (e) { console.error(e); UI.toast(t('xl.err.link'), { type: 'bad' }); });
         }).then(function () {

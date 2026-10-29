@@ -200,8 +200,26 @@
     };
     var updatedCustomers = new Set();
 
+    var anchors = opts.anchors || null, keep = opts.keep || null;
     records.forEach(function (rec) {
       var f = rec.fields;
+      // the linked file read again: this row is known to hold this policy (see FileLink.hintsFor)
+      var anchored = anchors && state.policies.get(anchors.get(rec.sheet + '\u0001' + rec.row));
+      var owner = anchored && !claimed.has(anchored.id) && anchored.month === rec.month && state.customers.get(anchored.customerId);
+      if (owner) {
+        claimed.add(anchored.id);
+        if (!(keep && keep.has(anchored.id))) {
+          idx.remove(owner);
+          if (mergeCustomerInfo(owner, f, rec.month)) { owner.updatedAt = ctx.now; updatedCustomers.add(owner); }
+          idx.add(owner);
+          if (updateFromImport(anchored, policyFromRecord(rec, owner.id, ctx), ctx.now)) res.updated.push(anchored); else res.unchanged++;
+        } else res.unchanged++; // changed in the app since the last save: the app's version stays
+        res.placed.push({ sheet: rec.sheet, row: rec.row, id: anchored.id });
+        (rec.issues || []).forEach(function (is) {
+          res.issues.push({ sheet: rec.sheet, row: rec.row, type: is.type, field: is.field, value: is.value, customer: owner.name });
+        });
+        return;
+      }
       var m = idx.match(f);
       var c;
       if (m) {

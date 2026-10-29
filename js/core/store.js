@@ -688,11 +688,36 @@
   };
 
   /** İptal rows of an import: the same row read again is recognised, new rows are added. */
+  // what a row of the İptal block says (the rest of a cancellation is the app's own)
+  var BLOCK_FIELDS = ['company', 'policyText', 'insuredName', 'card', 'account', 'cash'];
+
   function importCancels(recs, ctx) {
     var pool = new Map();
     Store.cancellations.forEach(function (x) { var k = Portfolio.cancelKey(x); if (!pool.has(k)) pool.set(k, []); pool.get(k).push(x); });
     var claimed = new Set(), out = { added: [], updated: [], unchanged: 0, rows: [] };
     recs.forEach(function (r) {
+      // the linked file read again: this row of the İptal block is known to be this cancellation
+      var aid = ctx.anchors && ctx.anchors.get(r.sheet + '\u0001' + r.row);
+      var anchored = aid && !claimed.has(aid) && Store.cancellations.get(aid);
+      if (anchored) {
+        claimed.add(aid);
+        var changed = false;
+        if (!(ctx.keep && ctx.keep.has(aid))) {
+          BLOCK_FIELDS.forEach(function (f) {
+            var v = r[f] == null || r[f] === '' ? (f === 'card' || f === 'account' || f === 'cash' ? null : '') : r[f];
+            if (String(anchored[f] == null ? '' : anchored[f]) !== String(v == null ? '' : v)) { anchored[f] = v; changed = true; }
+          });
+        }
+        anchored.cells = r.cells;
+        var src = anchored.source || {};
+        if (changed || src.sheet !== r.sheet || src.row !== r.row || src.file !== ctx.fileName) {
+          anchored.source = { type: 'import', importId: src.importId || ctx.importId, file: ctx.fileName, sheet: r.sheet, row: r.row };
+          anchored.updatedAt = ctx.now;
+          out.updated.push(anchored);
+        } else out.unchanged++;
+        out.rows.push({ rec: r, x: anchored });
+        return;
+      }
       var k = Portfolio.cancelKey(r);
       var hit = (pool.get(k) || []).filter(function (x) { return !claimed.has(x.id); })[0];
       if (hit) {
@@ -729,10 +754,14 @@
     var importId = U.uid('i');
     var now = Date.now();
     var state = { customers: Store.customers, policies: Store.policies };
-    var res = Portfolio.importRecords(state, records, { importId: importId, fileName: opts.fileName, now: now });
+    // the linked file read again (FileLink.hintsFor): known rows, records changed or deleted in the app meanwhile
+    var hints = opts.mode === 'replace' ? null : opts.hints || null;
+    function kept(r) { return !hints || !hints.skip.has(r.sheet + '\u0001' + r.row); }
+    function keptCancel(r) { return !hints || !hints.cancelSkip.has(r.sheet + '\u0001' + r.row); }
+    var res = Portfolio.importRecords(state, records.filter(kept), { importId: importId, fileName: opts.fileName, now: now, anchors: hints && hints.anchors, keep: hints && hints.keep });
     res.customersAdded.forEach(function (c) { c.createdBy = importId; });
     // İptal rows, then find the policy each one cancels
-    var cres = importCancels(opts.cancels || [], { importId: importId, fileName: opts.fileName || '', now: now });
+    var cres = importCancels((opts.cancels || []).filter(keptCancel), { importId: importId, fileName: opts.fileName || '', now: now, anchors: hints && hints.cancelAnchors, keep: hints && hints.cancelKeep });
     var relinked = relink();
     // which row of the file became which İptal record (to write them back to the same rows)
     res.cancelsPlaced = cres.rows.map(function (o) { return { sheet: o.rec.sheet, row: o.rec.row, id: o.x.id }; });

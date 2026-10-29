@@ -61,7 +61,7 @@
     var l = FileLink.link;
     if (!l) return null;
     var st = FileLink.status;
-    var tone = { pending: 'busy', saving: 'busy', permission: 'warn', external: 'warn', locked: 'warn', confirm: 'warn', review: 'warn', missing: 'err', error: 'err' }[st] || '';
+    var tone = { pending: 'busy', saving: 'busy', permission: 'warn', repick: 'warn', external: 'warn', locked: 'warn', confirm: 'warn', review: 'warn', missing: 'err', error: 'err' }[st] || '';
     var text;
     if (l.kind === 'copy') text = t('xl.foot.copy');
     else if (st === 'saved') text = l.lastSyncAt ? t('xl.foot.saved', { time: clock(l.lastSyncAt) }) : t('xl.foot.linked');
@@ -91,6 +91,13 @@
     });
   }
 
+  function repick() {
+    var name = FileLink.link.name;
+    return FileLink.repick(function (other) {
+      return UI.confirm({ title: t('xl.otherFileTitle'), message: t('xl.otherFileMsg', { name: other, linked: name }), confirm: t('xl.otherFileGo') });
+    });
+  }
+
   function unlink() {
     return UI.confirm({ title: t('xl.unlinkTitle'), message: t('xl.unlinkMsg', { name: FileLink.link.name }), confirm: t('xl.unlink') }).then(function (ok) {
       if (!ok) return;
@@ -110,7 +117,10 @@
         h('div', { class: 'excel-notice-text' }, h('strong', null, title), h('div', { class: 'small' }, text)),
         h('div', { class: 'excel-notice-actions' }, buttons)));
     }
-    if (st === 'permission') {
+    if (st === 'repick') {
+      box('warn', 'file-search', t('xl.b.repick.t'), t(FileLink.dirty ? 'xl.b.repick.dirty' : 'xl.b.repick.s', { name: name }),
+        [btn('xl-repick-file', t('xl.b.repick.btn'), 'primary', repick)]);
+    } else if (st === 'permission') {
       box('warn', 'lock', t('xl.b.permission.t'), t(FileLink.dirty ? 'xl.b.permission.dirty' : 'xl.b.permission.s', { name: name }),
         [btn('xl-allow', t('xl.b.permission.btn'), 'primary', FileLink.saveNow)]);
     } else if (st === 'external') {
@@ -120,12 +130,12 @@
       box('warn', 'file-lock', t('xl.b.locked.t'), t('xl.b.locked.s', { name: name }), [btn('xl-retry', t('xl.b.retry'), '', FileLink.saveNow)]);
     } else if (st === 'missing') {
       box('bad', 'file-x', t('xl.b.missing.t'), t('xl.b.missing.s', { name: name }),
-        (FileLink.canWrite() ? [btn('xl-repick', t('xl.b.missing.pick'), 'primary', FileLink.linkExisting)] : []).concat([btn('xl-unlink', t('xl.unlink'), '', unlink)]));
+        (FileLink.canWrite() ? [btn('xl-repick', t('xl.b.missing.pick'), 'primary', repick)] : []).concat([btn('xl-unlink', t('xl.unlink'), '', unlink)]));
     } else if (st === 'confirm') {
       box('warn', 'trash-2', t('xl.b.confirm.t', { n: FileLink.deletes }), t('xl.b.confirm.s', { name: name }),
         [btn('xl-confirm', t('xl.b.confirm.go'), 'primary', FileLink.confirmDeletes), btn('xl-unlink', t('xl.unlink'), '', unlink)]);
     } else if (st === 'review') {
-      var n = (FileLink.missing || []).length;
+      var n = FileLink.missingCount();
       box('warn', 'file-question', t('xl.b.review.t', { n: n }), t('xl.b.review.s', { name: name }),
         [btn('xl-review-remove', t('xl.b.review.remove'), 'primary', function () { return FileLink.resolveMissing(true).then(function () { UI.toast(t('xl.b.review.removed', { n: n })); }); }),
           btn('xl-review-keep', t('xl.b.review.keep'), '', function () { return FileLink.resolveMissing(false); })]);

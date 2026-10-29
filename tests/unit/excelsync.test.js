@@ -366,3 +366,16 @@ test('sheet names for new months follow the file\'s own style', () => {
   assert.equal(Sync.newSheetName('2026-11', null, ['Kasım 2026']), 'Kasım 2026 (2)');
   assert.equal(Sync.renameMonth('EKİM 2026 ÜRETİM LİSTESİ', '2026-10', '2026-11'), 'KASIM 2026 ÜRETİM LİSTESİ');
 });
+
+test('rows changed in Excel still line up with the rows of the last save', () => {
+  const layout = { columns: [{ col: 0, header: 'Adı soyadı', field: 'name', role: 'primary' }, { col: 1, header: 'Poliçe numarası', field: 'policyNo', role: 'primary' }, { col: 2, header: 'Şirket poliçe tutarı', field: 'premium', role: 'primary' }] };
+  const row = (name, no, premium) => ({ vals: Sync.keyed({ 0: name, 1: no, 2: premium }, layout) });
+  const saved = [row('Ali Er', 'P-1', 100), row('Can Ak', 'P-2', 200), row('Ece Su', 'P-3', 300), row('Oya Tan', 'P-4', 400)];
+  // in Excel: a row typed above, Can Ak's premium changed, Ece Su deleted, a row typed at the end
+  const now = [row('Yeni Kişi', 'P-9', 50), row('Ali Er', 'P-1', 100), row('Can Ak', 'P-2', 250), row('Oya Tan', 'P-4', 400), row('Son Kişi', 'P-10', 60)];
+  const pairs = Sync.align(saved, now, 0.6).map(m => [m[0], m[1]]);
+  assert.deepEqual(pairs, [[0, 1], [1, 2], [3, 3]], 'Ali, Can (edited) and Oya found; Ece is gone; the new rows are new');
+  // a column moved in Excel still compares with itself
+  const moved = { columns: [{ col: 0, header: 'Poliçe numarası', field: 'policyNo', role: 'primary' }, { col: 1, header: 'Adı soyadı', field: 'name', role: 'primary' }, { col: 2, header: 'Şirket poliçe tutarı', field: 'premium', role: 'primary' }] };
+  assert.equal(Sync.similarity(Sync.keyed({ 0: 'P-1', 1: 'Ali Er', 2: 100 }, moved), saved[0].vals), 1);
+});

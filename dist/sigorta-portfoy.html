@@ -2457,8 +2457,26 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     };
     var updatedCustomers = new Set();
 
+    var anchors = opts.anchors || null, keep = opts.keep || null;
     records.forEach(function (rec) {
       var f = rec.fields;
+      // the linked file read again: this row is known to hold this policy (see FileLink.hintsFor)
+      var anchored = anchors && state.policies.get(anchors.get(rec.sheet + '\u0001' + rec.row));
+      var owner = anchored && !claimed.has(anchored.id) && anchored.month === rec.month && state.customers.get(anchored.customerId);
+      if (owner) {
+        claimed.add(anchored.id);
+        if (!(keep && keep.has(anchored.id))) {
+          idx.remove(owner);
+          if (mergeCustomerInfo(owner, f, rec.month)) { owner.updatedAt = ctx.now; updatedCustomers.add(owner); }
+          idx.add(owner);
+          if (updateFromImport(anchored, policyFromRecord(rec, owner.id, ctx), ctx.now)) res.updated.push(anchored); else res.unchanged++;
+        } else res.unchanged++; // changed in the app since the last save: the app's version stays
+        res.placed.push({ sheet: rec.sheet, row: rec.row, id: anchored.id });
+        (rec.issues || []).forEach(function (is) {
+          res.issues.push({ sheet: rec.sheet, row: rec.row, type: is.type, field: is.field, value: is.value, customer: owner.name });
+        });
+        return;
+      }
       var m = idx.match(f);
       var c;
       if (m) {
@@ -3950,11 +3968,36 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   };
 
   /** İptal rows of an import: the same row read again is recognised, new rows are added. */
+  // what a row of the İptal block says (the rest of a cancellation is the app's own)
+  var BLOCK_FIELDS = ['company', 'policyText', 'insuredName', 'card', 'account', 'cash'];
+
   function importCancels(recs, ctx) {
     var pool = new Map();
     Store.cancellations.forEach(function (x) { var k = Portfolio.cancelKey(x); if (!pool.has(k)) pool.set(k, []); pool.get(k).push(x); });
     var claimed = new Set(), out = { added: [], updated: [], unchanged: 0, rows: [] };
     recs.forEach(function (r) {
+      // the linked file read again: this row of the İptal block is known to be this cancellation
+      var aid = ctx.anchors && ctx.anchors.get(r.sheet + '\u0001' + r.row);
+      var anchored = aid && !claimed.has(aid) && Store.cancellations.get(aid);
+      if (anchored) {
+        claimed.add(aid);
+        var changed = false;
+        if (!(ctx.keep && ctx.keep.has(aid))) {
+          BLOCK_FIELDS.forEach(function (f) {
+            var v = r[f] == null || r[f] === '' ? (f === 'card' || f === 'account' || f === 'cash' ? null : '') : r[f];
+            if (String(anchored[f] == null ? '' : anchored[f]) !== String(v == null ? '' : v)) { anchored[f] = v; changed = true; }
+          });
+        }
+        anchored.cells = r.cells;
+        var src = anchored.source || {};
+        if (changed || src.sheet !== r.sheet || src.row !== r.row || src.file !== ctx.fileName) {
+          anchored.source = { type: 'import', importId: src.importId || ctx.importId, file: ctx.fileName, sheet: r.sheet, row: r.row };
+          anchored.updatedAt = ctx.now;
+          out.updated.push(anchored);
+        } else out.unchanged++;
+        out.rows.push({ rec: r, x: anchored });
+        return;
+      }
       var k = Portfolio.cancelKey(r);
       var hit = (pool.get(k) || []).filter(function (x) { return !claimed.has(x.id); })[0];
       if (hit) {
@@ -3991,10 +4034,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var importId = U.uid('i');
     var now = Date.now();
     var state = { customers: Store.customers, policies: Store.policies };
-    var res = Portfolio.importRecords(state, records, { importId: importId, fileName: opts.fileName, now: now });
+    // the linked file read again (FileLink.hintsFor): known rows, records changed or deleted in the app meanwhile
+    var hints = opts.mode === 'replace' ? null : opts.hints || null;
+    function kept(r) { return !hints || !hints.skip.has(r.sheet + '\u0001' + r.row); }
+    function keptCancel(r) { return !hints || !hints.cancelSkip.has(r.sheet + '\u0001' + r.row); }
+    var res = Portfolio.importRecords(state, records.filter(kept), { importId: importId, fileName: opts.fileName, now: now, anchors: hints && hints.anchors, keep: hints && hints.keep });
     res.customersAdded.forEach(function (c) { c.createdBy = importId; });
     // İptal rows, then find the policy each one cancels
-    var cres = importCancels(opts.cancels || [], { importId: importId, fileName: opts.fileName || '', now: now });
+    var cres = importCancels((opts.cancels || []).filter(keptCancel), { importId: importId, fileName: opts.fileName || '', now: now, anchors: hints && hints.cancelAnchors, keep: hints && hints.cancelKeep });
     var relinked = relink();
     // which row of the file became which İptal record (to write them back to the same rows)
     res.cancelsPlaced = cres.rows.map(function (o) { return { sheet: o.rec.sheet, row: o.rec.row, id: o.x.id }; });
@@ -5112,6 +5159,74 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return link;
   }
 
+  // ------------------------------------------------------------------ the file changed outside the app
+  /** What the app makes of a row of the file (an import record), column by column, as policyValues does. */
+  function recordValues(rec, layout) {
+    var f = rec.fields || {};
+    var p = Object.assign({}, f, { extras: rec.extras || {} });
+    var c = { name: f.name || '', tc: f.tc || '', phone: f.phone || '', profession: f.profession || '', email: f.email || '', address: f.address || '', birthDate: f.birthDate || '' };
+    return policyValues(p, c, layout);
+  }
+
+  /** Values keyed by column header instead of position, so a column moved in Excel still compares with itself. */
+  function keyed(vals, layout) {
+    var seen = {}, out = {};
+    layout.columns.forEach(function (c) {
+      var k = U.fold(String(c.header || '')).replace(/\s+/g, ' ');
+      seen[k] = (seen[k] || 0) + 1;
+      if (seen[k] > 1) k += '#' + seen[k];
+      if (c.role === 'ignored') return;
+      var v = vals ? vals[c.col] : null;
+      out[k] = JSON.stringify(v == null ? null : v);
+    });
+    return out;
+  }
+  function keyedCancel(vals, block) {
+    var out = {};
+    (block.kinds || BLOCK_KINDS).forEach(function (k, i) { out[k] = JSON.stringify(vals && vals[i] != null ? vals[i] : null); });
+    return out;
+  }
+  /** Share of the filled-in cells two rows agree on (0…1). */
+  function similarity(a, b) {
+    var n = 0, hit = 0;
+    for (var k in a) {
+      if (!Object.prototype.hasOwnProperty.call(b, k)) continue;
+      if (a[k] === 'null' && b[k] === 'null') continue;
+      n++;
+      if (a[k] === b[k]) hit++;
+    }
+    return n ? hit / n : 0;
+  }
+
+  /**
+   * Lines up two lists of rows in order (the rows the link knows, the rows the file has now) so that the pairs
+   * agree on as many cells as possible: rows added, removed or edited in Excel in between still line up.
+   * a, b: [{ vals: keyed }]. Returns [[indexInA, indexInB, score]], every score >= min.
+   */
+  function align(a, b, min) {
+    var n = a.length, m = b.length, i, k;
+    var S = [], dp = [];
+    for (i = 0; i < n; i++) { var row = new Float64Array(m); for (k = 0; k < m; k++) row[k] = similarity(a[i].vals, b[k].vals); S.push(row); }
+    for (i = 0; i <= n; i++) dp.push(new Float64Array(m + 1));
+    for (i = 1; i <= n; i++) {
+      for (k = 1; k <= m; k++) {
+        var best = Math.max(dp[i - 1][k], dp[i][k - 1]);
+        var sc = S[i - 1][k - 1];
+        if (sc >= min && dp[i - 1][k - 1] + sc > best) best = dp[i - 1][k - 1] + sc;
+        dp[i][k] = best;
+      }
+    }
+    var out = [];
+    i = n; k = m;
+    while (i > 0 && k > 0) {
+      var s2 = S[i - 1][k - 1];
+      if (s2 >= min && dp[i][k] === dp[i - 1][k - 1] + s2) { out.push([i - 1, k - 1, s2]); i--; k--; }
+      else if (dp[i][k] === dp[i - 1][k]) i--;
+      else k--;
+    }
+    return out.reverse();
+  }
+
   /** The first page of a workbook the app starts itself, for a month that has nothing yet. */
   function startSheet(wb, month, meta) {
     var layout = defaultLayout(meta);
@@ -5121,7 +5236,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   return {
-    createLink: createLink, buildPlan: buildPlan, apply: apply, startSheet: startSheet, policyValues: policyValues, cancelValues: cancelValues,
+    createLink: createLink, buildPlan: buildPlan, apply: apply, startSheet: startSheet,
+    recordValues: recordValues, keyed: keyed, keyedCancel: keyedCancel, similarity: similarity, align: align, policyValues: policyValues, cancelValues: cancelValues,
     shiftFormula: shiftFormula, eachRef: eachRef, renameMonth: renameMonth, newSheetName: newSheetName, defaultLayout: defaultLayout,
     BLOCK_KINDS: BLOCK_KINDS, BLOCK_HEADERS: BLOCK_HEADERS
   };
@@ -5177,6 +5293,68 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return DB.putRaw(DB.FILES, [{ key: 'link', value: JSON.parse(JSON.stringify(FileLink.link)) }]);
   }
   function getCopy() { return DB.get(DB.FILES, 'copy').then(function (r) { return r ? r.value : null; }); }
+
+  // The file handle lives in a database of its own that nothing else reads. Some Chrome builds (seen in 153)
+  // bring the whole browser down when such a handle is read back from IndexedDB, so the read is guarded:
+  // if the browser went down while reading it, this Chrome version keeps no handle and the user picks the file
+  // again once per session instead.
+  var HANDLE_DB = 'sigorta-portfoy-file';
+  function chromeVersion() { var m = /Chrom(?:e|ium)\/(\d+)/.exec(root.navigator ? root.navigator.userAgent : ''); return m ? m[1] : 'other'; }
+  function ls(k, v) {
+    try {
+      if (v === undefined) return root.localStorage.getItem(k);
+      if (v === null) root.localStorage.removeItem(k); else root.localStorage.setItem(k, v);
+    } catch (e) { return null; }
+    return null;
+  }
+  function handleStoreUsable() {
+    try { root.localStorage.getItem('x'); } catch (e) { return false; } // without the guard, no stored handle
+    return !!root.indexedDB && ls('sp:handle-off') !== chromeVersion();
+  }
+  function handleDb() {
+    return new Promise(function (resolve, reject) {
+      var r = root.indexedDB.open(HANDLE_DB, 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore('h'); };
+      r.onsuccess = function () { resolve(r.result); };
+      r.onerror = function () { reject(r.error); };
+      r.onblocked = function () { reject(new Error('blocked')); };
+    });
+  }
+  function dropHandle() {
+    return new Promise(function (resolve) {
+      if (!root.indexedDB) { resolve(); return; }
+      var r = root.indexedDB.deleteDatabase(HANDLE_DB);
+      r.onsuccess = r.onerror = r.onblocked = function () { resolve(); };
+    });
+  }
+  function storeHandle(h) {
+    if (!h || !handleStoreUsable()) return dropHandle();
+    return handleDb().then(function (db) {
+      return new Promise(function (resolve) {
+        var tx = db.transaction('h', 'readwrite');
+        tx.objectStore('h').put(h, 'file');
+        tx.oncomplete = tx.onerror = tx.onabort = function () { db.close(); resolve(); };
+      });
+    }).catch(function () { /* the file is picked again next time */ });
+  }
+  function loadHandle() {
+    if (!root.indexedDB) return Promise.resolve(null);
+    if (ls('sp:handle-reading')) {
+      // the last start went down while reading the handle: never again on this browser version
+      ls('sp:handle-reading', null);
+      ls('sp:handle-off', chromeVersion());
+      return dropHandle().then(function () { return null; });
+    }
+    if (!handleStoreUsable()) return Promise.resolve(null);
+    ls('sp:handle-reading', String(Date.now()));
+    return handleDb().then(function (db) {
+      return new Promise(function (resolve) {
+        var q = db.transaction('h', 'readonly').objectStore('h').get('file');
+        q.onsuccess = function () { db.close(); resolve(q.result || null); };
+        q.onerror = function () { db.close(); resolve(null); };
+      });
+    }).catch(function () { return null; }).then(function (h) { ls('sp:handle-reading', null); return h; });
+  }
   function putCopy(bytes) { return DB.putRaw(DB.FILES, [{ key: 'copy', value: bytes }]); }
 
   /** Earlier versions of the file: the one from when it was linked, then at most one per half hour of saving. */
@@ -5205,10 +5383,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return DB.get(DB.FILES, 'link').then(function (r) {
       FileLink.link = r ? r.value : null;
       if (!FileLink.link) { setStatus('off'); return null; }
-      return DB.get(DB.FILES, 'handle').then(function (hr) {
-        handle = hr ? hr.value : null;
-        if (FileLink.link.kind !== 'file') { setStatus('saved'); return null; }
-        if (!handle) { setStatus('missing'); return null; }
+      if (FileLink.link.kind !== 'file') { setStatus('saved'); return null; }
+      return loadHandle().then(function (h) {
+        handle = h;
+        // no handle kept: the user points at the file once, and saving goes on
+        if (!handle) { setStatus('repick'); return null; }
         setStatus('saved');
         // the browser may still have the permission (Chrome: "allow on every visit"): then catch up right away
         return FileLink.sync();
@@ -5225,7 +5404,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (!FileLink.link) return;
     FileLink.dirty = true;
     if (FileLink.link.kind !== 'file' || held) { emit(); return; } // a copy is brought up to date when it is downloaded
-    if (['permission', 'external', 'missing', 'confirm', 'review'].indexOf(FileLink.status) >= 0) { emit(); return; }
+    if (['permission', 'repick', 'external', 'missing', 'confirm', 'review'].indexOf(FileLink.status) >= 0) { emit(); return; }
     clearTimeout(timer);
     if (FileLink.status !== 'saving' && FileLink.status !== 'locked') setStatus('pending');
     timer = setTimeout(function () { FileLink.sync(); }, delay == null ? DELAY : delay);
@@ -5260,6 +5439,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         return write(link, bytes, opts, function (out) { return putCopy(out).then(function () { return true; }); });
       });
     }
+    if (!handle) { FileLink.dirty = true; setStatus('repick'); return Promise.resolve(false); }
     return permission(opts.gesture).then(function (ok) {
       if (!ok) { FileLink.dirty = true; setStatus('permission'); return false; }
       return handle.getFile().then(function (file) {
@@ -5364,17 +5544,89 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       sheets: o.analysis.sheets.filter(function (s) { return s.include && s.month.key; }).map(function (s) { return { name: s.name, month: s.month.key, layout: root.Importer.layoutOf(s) }; }),
       placed: o.placed, cancelsPlaced: o.cancelsPlaced, policies: Store.policies, customers: Store.customers, cancels: Store.cancellations
     });
-    // the same file imported again: policies it had before but has no longer were deleted in Excel
-    var missing = [];
+    if (o.hints) applyHints(link, o.hints, false);
+    // the same file imported again: what it had before but has no longer was deleted in Excel
+    var missing = { policies: [], cancels: [] };
     if (prev && sameFile(prev, o.name)) {
       var now = {};
-      Object.keys(link.sheets).forEach(function (n) { Object.keys(link.sheets[n].rows).forEach(function (id) { now[id] = true; }); });
+      Object.keys(link.sheets).forEach(function (n) {
+        Object.keys(link.sheets[n].rows).forEach(function (id) { now[id] = true; });
+        Object.keys(link.sheets[n].cancels).forEach(function (id) { now[id] = true; });
+      });
       Object.keys(prev.sheets || {}).forEach(function (n) {
-        Object.keys(prev.sheets[n].rows || {}).forEach(function (id) { if (!now[id] && Store.policies.has(id)) missing.push(id); });
+        Object.keys(prev.sheets[n].rows || {}).forEach(function (id) { if (!now[id] && Store.policies.has(id)) missing.policies.push(id); });
+        Object.keys(prev.sheets[n].cancels || {}).forEach(function (id) { if (!now[id] && Store.cancellations.has(id)) missing.cancels.push(id); });
       });
     }
-    return setLink(link, o, missing);
+    return setLink(link, o, missing.policies.length || missing.cancels.length ? missing : null);
   };
+
+  function byRow(a, b) { return a.row - b.row; }
+
+  /**
+   * The linked file read again after it was changed in Excel. Rows are lined up with the rows the app knows from
+   * its last save (rows may have been added, removed or edited since), so every known row keeps its policy or
+   * İptal record. Returns { anchors, keep, skip, fileVals, cancel… } for Store.importRecords and linkImport:
+   * anchors: row -> record; keep: records changed in the app since the last save (the app's version stays and
+   * is written back); skip: rows of records deleted in the app (they leave the file). null for any other file.
+   */
+  FileLink.hintsFor = function (name, analysis, built) {
+    var link = FileLink.link;
+    if (!link || !sameFile(link, name)) return null;
+    var Sync = root.ExcelSync, Importer = root.Importer;
+    var plan = currentPlan(link);
+    var pending = new Set(), xpending = new Set();
+    plan.sheets.forEach(function (s) {
+      s.rows.forEach(function (r) { if (r.from != null && r.keys.length) pending.add(r.id); });
+      s.cancels.forEach(function (r) { if (r.from != null && r.keys.length) xpending.add(r.id); });
+    });
+    var h = { anchors: new Map(), keep: new Set(), skip: new Set(), fileVals: new Map(), cancelAnchors: new Map(), cancelKeep: new Set(), cancelSkip: new Set(), cancelFileVals: new Map() };
+    analysis.sheets.forEach(function (s) {
+      var l = link.sheets[s.name];
+      if (!l || !s.include || !s.month.key || s.month.key !== l.month) return;
+      var layout = Importer.layoutOf(s);
+      var owned = Object.keys(l.rows || {}).map(function (id) { return { id: id, row: l.rows[id][0], vals: Sync.keyed(l.rows[id][1], l.layout) }; }).sort(byRow);
+      var recs = built.records.filter(function (r) { return r.sheet === s.name; }).sort(byRow).map(function (rec) {
+        var v = Sync.recordValues(rec, layout);
+        return { rec: rec, raw: v, vals: Sync.keyed(v, layout) };
+      });
+      Sync.align(owned, recs, 0.6).forEach(function (m) {
+        var o = owned[m[0]], x = recs[m[1]], key = s.name + '\u0001' + x.rec.row;
+        var p = Store.policies.get(o.id);
+        if (!p || p.month !== s.month.key) { h.skip.add(key); return; } // deleted or moved in the app: the row goes
+        h.anchors.set(key, o.id);
+        h.fileVals.set(o.id, x.raw);
+        if (pending.has(o.id)) h.keep.add(o.id);
+      });
+      if (!l.layout.block || !s.cancelBlock) return;
+      var block = layout.block;
+      var xowned = Object.keys(l.cancels || {}).map(function (id) { return { id: id, row: l.cancels[id][0], vals: Sync.keyedCancel(l.cancels[id][1], l.layout.block) }; }).sort(byRow);
+      var xrecs = built.cancels.filter(function (c) { return c.sheet === s.name; }).sort(byRow).map(function (c) {
+        var v = Sync.cancelValues(c, block);
+        return { rec: c, raw: v, vals: Sync.keyedCancel(v, block) };
+      });
+      Sync.align(xowned, xrecs, 0.5).forEach(function (m) {
+        var o = xowned[m[0]], x = xrecs[m[1]], key = s.name + '\u0001' + x.rec.row;
+        var c = Store.cancellations.get(o.id);
+        if (!c || c.month !== s.month.key) { h.cancelSkip.add(key); return; }
+        h.cancelAnchors.set(key, o.id);
+        h.cancelFileVals.set(o.id, x.raw);
+        if (xpending.has(o.id)) h.cancelKeep.add(o.id);
+      });
+    });
+    return h;
+  };
+
+  /** What the hints mean for the new link: kept records are written back, rows of deleted ones are removed. */
+  function applyHints(link, h, all) {
+    Object.keys(link.sheets).forEach(function (n) {
+      var s = link.sheets[n];
+      Object.keys(s.rows).forEach(function (id) { if ((all || h.keep.has(id)) && h.fileVals.has(id)) s.rows[id][1] = h.fileVals.get(id); });
+      Object.keys(s.cancels).forEach(function (id) { if ((all || h.cancelKeep.has(id)) && h.cancelFileVals.has(id)) s.cancels[id][1] = h.cancelFileVals.get(id); });
+    });
+    h.skip.forEach(function (key) { var k = key.split('\u0001'), s = link.sheets[k[0]]; if (s) s.rows['gone:' + k[1]] = [Number(k[1]), {}]; });
+    h.cancelSkip.forEach(function (key) { var k = key.split('\u0001'), s = link.sheets[k[0]]; if (s) s.cancels['gone:' + k[1]] = [Number(k[1]), []]; });
+  }
 
   function setLink(link, o, missing) {
     link.name = o.name;
@@ -5389,10 +5641,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     clearTimeout(retryTimer);
     FileLink.link = link;
     handle = o.handle || null;
-    FileLink.missing = missing && missing.length ? missing : null;
+    FileLink.missing = missing || null;
     FileLink.dirty = true;
     return DB.clear(DB.FILES).then(function () {
-      return Promise.all([saveLink(), DB.putRaw(DB.FILES, [{ key: 'handle', value: handle }]), link.kind === 'copy' ? putCopy(o.bytes) : null]);
+      return Promise.all([saveLink(), storeHandle(handle), link.kind === 'copy' ? putCopy(o.bytes) : null]);
     }).then(function () {
       return o.bytes ? keepVersion(o.bytes, 'linked') : null;
     }).then(function () {
@@ -5403,18 +5655,20 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     });
   }
 
-  /** After the file was imported again: the policies it no longer has are deleted here too, or written back. */
+  /** After the file was imported again: what it no longer has is deleted here too, or written back. */
   FileLink.resolveMissing = function (remove) {
-    var ids = FileLink.missing || [];
+    var m = FileLink.missing || { policies: [], cancels: [] };
     FileLink.missing = null;
     if (remove) {
       FileLink.hold();
-      ids.forEach(function (id) { if (Store.policies.has(id)) Store.deletePolicy(id); });
+      m.cancels.forEach(function (id) { if (Store.cancellations.has(id)) Store.deleteCancellation(id); });
+      m.policies.forEach(function (id) { if (Store.policies.has(id)) Store.deletePolicy(id); });
       FileLink.release();
     }
     setStatus('saved');
     return FileLink.sync({ gesture: true });
   };
+  FileLink.missingCount = function () { var m = FileLink.missing; return m ? m.policies.length + m.cancels.length : 0; };
 
   function cloneMap(m) { return new Map(Array.from(m.entries()).map(function (e) { return [e[0], JSON.parse(JSON.stringify(e[1]))]; })); }
 
@@ -5426,18 +5680,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var XLSX = root.XLSX, Importer = root.Importer, Portfolio = root.Portfolio;
     var a = Importer.analyzeWorkbook(Importer.readWorkbook(new Uint8Array(bytes), XLSX, o.name), XLSX, { fileName: o.name, saved: Store.mappings });
     var built = Importer.buildRecords(a, { tidyNames: Store.settings.tidyNames !== false });
+    // the file this link already knows: its rows are lined up with the last save first
+    var hints = FileLink.hintsFor(o.name, a, built);
+    function free(r) { return !hints || (!hints.anchors.has(r.sheet + '\u0001' + r.row) && !hints.skip.has(r.sheet + '\u0001' + r.row)); }
+    function freeCancel(c) { return !hints || (!hints.cancelAnchors.has(c.sheet + '\u0001' + c.row) && !hints.cancelSkip.has(c.sheet + '\u0001' + c.row)); }
+    // the other rows: a dry run of the import on a copy of the data tells which policy each one is
     var state = { customers: cloneMap(Store.customers), policies: cloneMap(Store.policies) };
-    var res = Portfolio.importRecords(state, built.records, { fileName: o.name });
+    var res = Portfolio.importRecords(state, built.records.filter(free), { fileName: o.name });
     var placed = res.placed.filter(function (x) { return Store.policies.has(x.id); });
     var byKey = new Map();
     Store.cancellations.forEach(function (x) { var k = Portfolio.cancelKey(x); if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(x.id); });
     var cancelsPlaced = [];
-    built.cancels.forEach(function (c) { var l = byKey.get(Portfolio.cancelKey(c)); if (l && l.length) cancelsPlaced.push({ sheet: c.sheet, row: c.row, id: l.shift() }); });
-    // what the rows say now (the file's values): the first save writes wherever the app differs
+    built.cancels.filter(freeCancel).forEach(function (c) { var l = byKey.get(Portfolio.cancelKey(c)); if (l && l.length) cancelsPlaced.push({ sheet: c.sheet, row: c.row, id: l.shift() }); });
+    if (hints) {
+      hints.anchors.forEach(function (id, key) { var k = key.split('\u0001'); placed.push({ sheet: k[0], row: Number(k[1]), id: id }); });
+      hints.cancelAnchors.forEach(function (id, key) { var k = key.split('\u0001'); cancelsPlaced.push({ sheet: k[0], row: Number(k[1]), id: id }); });
+    }
+    // what the rows say now (the file's values): the first save writes the app's values wherever they differ
     var link = root.ExcelSync.createLink({
       sheets: a.sheets.filter(function (s) { return s.include && s.month.key; }).map(function (s) { return { name: s.name, month: s.month.key, layout: Importer.layoutOf(s) }; }),
       placed: placed, cancelsPlaced: cancelsPlaced, policies: state.policies, customers: state.customers, cancels: Store.cancellations
     });
+    if (hints) applyHints(link, hints, true);
     return setLink(link, o, null);
   }
 
@@ -5469,12 +5733,39 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   /** Asks for an Excel file: { file, handle }. Uses the browser's file picker that can also give write access. */
   FileLink.pick = function () {
-    return root.showOpenFilePicker({ types: [{ description: 'Excel', accept: {
+    return root.showOpenFilePicker({ id: 'sigorta-portfoy-excel', types: [{ description: 'Excel', accept: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'], 'application/vnd.ms-excel': ['.xls'],
       'application/vnd.ms-excel.sheet.macroEnabled.12': ['.xlsm'], 'application/vnd.oasis.opendocument.spreadsheet': ['.ods'], 'text/csv': ['.csv']
     } }], excludeAcceptAllOption: false, multiple: false }).then(function (list) {
       var h = list[0];
       return h.getFile().then(function (file) { return { file: file, handle: h }; });
+    });
+  };
+
+  /**
+   * This session has no handle for the linked file (see loadHandle): the user picks it once. The same file goes on
+   * as before; a file of another name is linked in its place only after a yes (onOther).
+   */
+  FileLink.repick = function (onOther) {
+    var link = FileLink.link;
+    if (!link) return Promise.resolve(false);
+    var picked;
+    return FileLink.pick().then(function (p) {
+      picked = p;
+      if (!sameFile(link, p.file.name)) {
+        return Promise.resolve(onOther ? onOther(p.file.name) : false).then(function (ok) {
+          if (!ok) return false;
+          if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
+          return p.file.arrayBuffer().then(function (bytes) {
+            return relinkFrom(bytes, { name: p.file.name, handle: p.handle, bytes: bytes, lastModified: p.file.lastModified, size: p.file.size });
+          });
+        });
+      }
+      handle = p.handle;
+      return storeHandle(handle).then(function () {
+        setStatus('saved');
+        return FileLink.sync({ gesture: true });
+      });
     });
   };
 
@@ -5484,11 +5775,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     return FileLink.pick().then(function (p) {
       picked = p;
       if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
-      return p.handle.requestPermission({ mode: 'readwrite' });
-    }).then(function (perm) {
-      if (perm !== 'granted') throw Object.assign(new Error('permission'), { code: 'permission' });
-      return picked.file.arrayBuffer();
+      return p.file.arrayBuffer();
     }).then(function (bytes) {
+      // write access is asked for by the first save (or by the notice, if the browser wants one more click)
       return relinkFrom(bytes, { name: picked.file.name, handle: picked.handle, bytes: bytes, lastModified: picked.file.lastModified, size: picked.file.size });
     });
   };
@@ -5496,14 +5785,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   /** A new .xlsx with every month of the app on its own page (the agency's yellow headers and İptal block). */
   FileLink.createNew = function (suggested) {
     var h;
-    return root.showSaveFilePicker({ suggestedName: suggested || 'sigorta-portfoy.xlsx', types: XLSX_TYPES }).then(function (x) {
+    return root.showSaveFilePicker({ id: 'sigorta-portfoy-excel', suggestedName: suggested || 'sigorta-portfoy.xlsx', types: XLSX_TYPES }).then(function (x) {
       h = x;
       var link = { sheets: {}, months: {}, name: h.name, kind: 'file', linkedAt: Date.now(), writes: 0 };
       clearTimeout(timer);
       FileLink.link = link;
       handle = h;
       FileLink.missing = null;
-      return DB.clear(DB.FILES).then(function () { return DB.putRaw(DB.FILES, [{ key: 'handle', value: h }]); }).then(function () {
+      return DB.clear(DB.FILES).then(function () { return storeHandle(h); }).then(function () {
         return write(link, null, {
           confirmed: true,
           // nothing to write yet: the file still needs one page, this month's
@@ -5527,7 +5816,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     FileLink.missing = null;
     FileLink.dirty = false;
     FileLink.deletes = 0;
-    return DB.clear(DB.FILES).then(function () { setStatus('off'); });
+    return Promise.all([DB.clear(DB.FILES), dropHandle()]).then(function () { setStatus('off'); });
   };
 
   /** The workbook with every change in it: { name, bytes } (a copy is brought up to date first). */
@@ -5916,6 +6205,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'xl.b.permission.s': 'Tarayıcı, {name} dosyasına yazmak için her oturumda bir kez izin ister.',
     'xl.b.permission.dirty': 'Kaydedilmemiş değişiklikler var. Tarayıcı, {name} dosyasına yazmak için her oturumda bir kez izin ister; izin verene kadar değişiklikler yalnızca uygulamada saklanır.',
     'xl.b.permission.btn': 'İzin ver ve kaydet',
+    'xl.foot.repick': 'Excel: dosyayı seçin', 'xl.b.repick.t': 'Kaydetmeye devam etmek için Excel dosyasını seçin',
+    'xl.b.repick.s': 'Bu oturumda {name} dosyasına kaydedebilmek için dosyayı bir kez seçin (pencere dosyanın klasöründe açılır).',
+    'xl.b.repick.dirty': 'Kaydedilmemiş değişiklikler var. {name} dosyasına kaydetmek için dosyayı bir kez seçin; seçene kadar değişiklikler yalnızca uygulamada saklanır.',
+    'xl.b.repick.btn': 'Dosyayı seç', 'xl.otherFileTitle': 'Başka bir dosya seçildi',
+    'xl.otherFileMsg': '{name} seçildi, ama bağlı dosya {linked}. Değişiklikler bundan sonra {name} dosyasına mı kaydedilsin?', 'xl.otherFileGo': 'Bu dosyaya kaydet',
     'xl.b.external.t': 'Excel dosyası uygulama dışında değiştirilmiş',
     'xl.b.external.s': '{name} son kayıttan sonra başka bir programda (ör. Excel) kaydedilmiş. Üzerine yazmadan önce ne yapılacağını seçin.',
     'xl.b.external.import': 'Dosyadaki değişiklikleri al', 'xl.b.external.overwrite': 'Uygulamadakini dosyaya yaz',
@@ -6317,6 +6611,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'xl.b.permission.s': 'The browser asks once per session before the app may write to {name}.',
     'xl.b.permission.dirty': 'There are unsaved changes. The browser asks once per session before the app may write to {name}; until then changes are kept in the app only.',
     'xl.b.permission.btn': 'Allow and save',
+    'xl.foot.repick': 'Excel: pick the file', 'xl.b.repick.t': 'Pick the Excel file to keep saving',
+    'xl.b.repick.s': 'To save to {name} in this session, pick the file once (the dialog opens in its folder).',
+    'xl.b.repick.dirty': 'There are unsaved changes. Pick {name} once to save them; until then changes are kept in the app only.',
+    'xl.b.repick.btn': 'Pick the file', 'xl.otherFileTitle': 'Another file was picked',
+    'xl.otherFileMsg': '{name} was picked, but the linked file is {linked}. Save changes to {name} from now on?', 'xl.otherFileGo': 'Save to this file',
     'xl.b.external.t': 'The Excel file was changed outside the app',
     'xl.b.external.s': '{name} was saved by another program (e.g. Excel) after the app last wrote to it. Choose what to do before it is overwritten.',
     'xl.b.external.import': 'Take the changes from the file', 'xl.b.external.overwrite': 'Write the app\'s data to the file',
@@ -10514,7 +10813,9 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
         var built = Importer.buildRecords(a, { tidyNames: vs.tidyNames, lang: lang() });
         var saveMap = {};
         if (vs.remember) Object.keys(vs.overrides).forEach(function (k) { saveMap[k] = vs.overrides[k]; });
-        Store.importRecords(built.records, a, { mode: vs.mode, fileName: vs.file.name, saveMappings: saveMap, cancels: built.cancels }).then(function (r) {
+        // the linked file again (changed in Excel): its rows are lined up with the last save
+        var hints = vs.mode === 'replace' ? null : FileLink.hintsFor(vs.file.name, a, built);
+        Store.importRecords(built.records, a, { mode: vs.mode, fileName: vs.file.name, saveMappings: saveMap, cancels: built.cancels, hints: hints }).then(function (r) {
           vs.step = 'done';
           vs.result = r.result;
           vs.entry = r.entry;
@@ -10526,7 +10827,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
             return FileLink.linkImport({
               name: vs.file.name, handle: FileLink.canWrite() ? vs.handle : null, lastModified: vs.lastModified, size: bytes.byteLength,
               bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), analysis: a,
-              placed: r.result.placed, cancelsPlaced: r.result.cancelsPlaced, importId: r.entry.id
+              placed: r.result.placed, cancelsPlaced: r.result.cancelsPlaced, importId: r.entry.id, hints: hints
             });
           }).then(function () { vs.linked = true; }, function (e) { console.error(e); UI.toast(t('xl.err.link'), { type: 'bad' }); });
         }).then(function () {
@@ -10857,7 +11158,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     var l = FileLink.link;
     if (!l) return null;
     var st = FileLink.status;
-    var tone = { pending: 'busy', saving: 'busy', permission: 'warn', external: 'warn', locked: 'warn', confirm: 'warn', review: 'warn', missing: 'err', error: 'err' }[st] || '';
+    var tone = { pending: 'busy', saving: 'busy', permission: 'warn', repick: 'warn', external: 'warn', locked: 'warn', confirm: 'warn', review: 'warn', missing: 'err', error: 'err' }[st] || '';
     var text;
     if (l.kind === 'copy') text = t('xl.foot.copy');
     else if (st === 'saved') text = l.lastSyncAt ? t('xl.foot.saved', { time: clock(l.lastSyncAt) }) : t('xl.foot.linked');
@@ -10887,6 +11188,13 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     });
   }
 
+  function repick() {
+    var name = FileLink.link.name;
+    return FileLink.repick(function (other) {
+      return UI.confirm({ title: t('xl.otherFileTitle'), message: t('xl.otherFileMsg', { name: other, linked: name }), confirm: t('xl.otherFileGo') });
+    });
+  }
+
   function unlink() {
     return UI.confirm({ title: t('xl.unlinkTitle'), message: t('xl.unlinkMsg', { name: FileLink.link.name }), confirm: t('xl.unlink') }).then(function (ok) {
       if (!ok) return;
@@ -10906,7 +11214,10 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
         h('div', { class: 'excel-notice-text' }, h('strong', null, title), h('div', { class: 'small' }, text)),
         h('div', { class: 'excel-notice-actions' }, buttons)));
     }
-    if (st === 'permission') {
+    if (st === 'repick') {
+      box('warn', 'file-search', t('xl.b.repick.t'), t(FileLink.dirty ? 'xl.b.repick.dirty' : 'xl.b.repick.s', { name: name }),
+        [btn('xl-repick-file', t('xl.b.repick.btn'), 'primary', repick)]);
+    } else if (st === 'permission') {
       box('warn', 'lock', t('xl.b.permission.t'), t(FileLink.dirty ? 'xl.b.permission.dirty' : 'xl.b.permission.s', { name: name }),
         [btn('xl-allow', t('xl.b.permission.btn'), 'primary', FileLink.saveNow)]);
     } else if (st === 'external') {
@@ -10916,12 +11227,12 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
       box('warn', 'file-lock', t('xl.b.locked.t'), t('xl.b.locked.s', { name: name }), [btn('xl-retry', t('xl.b.retry'), '', FileLink.saveNow)]);
     } else if (st === 'missing') {
       box('bad', 'file-x', t('xl.b.missing.t'), t('xl.b.missing.s', { name: name }),
-        (FileLink.canWrite() ? [btn('xl-repick', t('xl.b.missing.pick'), 'primary', FileLink.linkExisting)] : []).concat([btn('xl-unlink', t('xl.unlink'), '', unlink)]));
+        (FileLink.canWrite() ? [btn('xl-repick', t('xl.b.missing.pick'), 'primary', repick)] : []).concat([btn('xl-unlink', t('xl.unlink'), '', unlink)]));
     } else if (st === 'confirm') {
       box('warn', 'trash-2', t('xl.b.confirm.t', { n: FileLink.deletes }), t('xl.b.confirm.s', { name: name }),
         [btn('xl-confirm', t('xl.b.confirm.go'), 'primary', FileLink.confirmDeletes), btn('xl-unlink', t('xl.unlink'), '', unlink)]);
     } else if (st === 'review') {
-      var n = (FileLink.missing || []).length;
+      var n = FileLink.missingCount();
       box('warn', 'file-question', t('xl.b.review.t', { n: n }), t('xl.b.review.s', { name: name }),
         [btn('xl-review-remove', t('xl.b.review.remove'), 'primary', function () { return FileLink.resolveMissing(true).then(function () { UI.toast(t('xl.b.review.removed', { n: n })); }); }),
           btn('xl-review-keep', t('xl.b.review.keep'), '', function () { return FileLink.resolveMissing(false); })]);

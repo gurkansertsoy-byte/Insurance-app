@@ -46,6 +46,68 @@
     return DB.putRaw(DB.FILES, [{ key: 'link', value: JSON.parse(JSON.stringify(FileLink.link)) }]);
   }
   function getCopy() { return DB.get(DB.FILES, 'copy').then(function (r) { return r ? r.value : null; }); }
+
+  // The file handle lives in a database of its own that nothing else reads. Some Chrome builds (seen in 153)
+  // bring the whole browser down when such a handle is read back from IndexedDB, so the read is guarded:
+  // if the browser went down while reading it, this Chrome version keeps no handle and the user picks the file
+  // again once per session instead.
+  var HANDLE_DB = 'sigorta-portfoy-file';
+  function chromeVersion() { var m = /Chrom(?:e|ium)\/(\d+)/.exec(root.navigator ? root.navigator.userAgent : ''); return m ? m[1] : 'other'; }
+  function ls(k, v) {
+    try {
+      if (v === undefined) return root.localStorage.getItem(k);
+      if (v === null) root.localStorage.removeItem(k); else root.localStorage.setItem(k, v);
+    } catch (e) { return null; }
+    return null;
+  }
+  function handleStoreUsable() {
+    try { root.localStorage.getItem('x'); } catch (e) { return false; } // without the guard, no stored handle
+    return !!root.indexedDB && ls('sp:handle-off') !== chromeVersion();
+  }
+  function handleDb() {
+    return new Promise(function (resolve, reject) {
+      var r = root.indexedDB.open(HANDLE_DB, 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore('h'); };
+      r.onsuccess = function () { resolve(r.result); };
+      r.onerror = function () { reject(r.error); };
+      r.onblocked = function () { reject(new Error('blocked')); };
+    });
+  }
+  function dropHandle() {
+    return new Promise(function (resolve) {
+      if (!root.indexedDB) { resolve(); return; }
+      var r = root.indexedDB.deleteDatabase(HANDLE_DB);
+      r.onsuccess = r.onerror = r.onblocked = function () { resolve(); };
+    });
+  }
+  function storeHandle(h) {
+    if (!h || !handleStoreUsable()) return dropHandle();
+    return handleDb().then(function (db) {
+      return new Promise(function (resolve) {
+        var tx = db.transaction('h', 'readwrite');
+        tx.objectStore('h').put(h, 'file');
+        tx.oncomplete = tx.onerror = tx.onabort = function () { db.close(); resolve(); };
+      });
+    }).catch(function () { /* the file is picked again next time */ });
+  }
+  function loadHandle() {
+    if (!root.indexedDB) return Promise.resolve(null);
+    if (ls('sp:handle-reading')) {
+      // the last start went down while reading the handle: never again on this browser version
+      ls('sp:handle-reading', null);
+      ls('sp:handle-off', chromeVersion());
+      return dropHandle().then(function () { return null; });
+    }
+    if (!handleStoreUsable()) return Promise.resolve(null);
+    ls('sp:handle-reading', String(Date.now()));
+    return handleDb().then(function (db) {
+      return new Promise(function (resolve) {
+        var q = db.transaction('h', 'readonly').objectStore('h').get('file');
+        q.onsuccess = function () { db.close(); resolve(q.result || null); };
+        q.onerror = function () { db.close(); resolve(null); };
+      });
+    }).catch(function () { return null; }).then(function (h) { ls('sp:handle-reading', null); return h; });
+  }
   function putCopy(bytes) { return DB.putRaw(DB.FILES, [{ key: 'copy', value: bytes }]); }
 
   /** Earlier versions of the file: the one from when it was linked, then at most one per half hour of saving. */
@@ -74,10 +136,11 @@
     return DB.get(DB.FILES, 'link').then(function (r) {
       FileLink.link = r ? r.value : null;
       if (!FileLink.link) { setStatus('off'); return null; }
-      return DB.get(DB.FILES, 'handle').then(function (hr) {
-        handle = hr ? hr.value : null;
-        if (FileLink.link.kind !== 'file') { setStatus('saved'); return null; }
-        if (!handle) { setStatus('missing'); return null; }
+      if (FileLink.link.kind !== 'file') { setStatus('saved'); return null; }
+      return loadHandle().then(function (h) {
+        handle = h;
+        // no handle kept: the user points at the file once, and saving goes on
+        if (!handle) { setStatus('repick'); return null; }
         setStatus('saved');
         // the browser may still have the permission (Chrome: "allow on every visit"): then catch up right away
         return FileLink.sync();
@@ -94,7 +157,7 @@
     if (!FileLink.link) return;
     FileLink.dirty = true;
     if (FileLink.link.kind !== 'file' || held) { emit(); return; } // a copy is brought up to date when it is downloaded
-    if (['permission', 'external', 'missing', 'confirm', 'review'].indexOf(FileLink.status) >= 0) { emit(); return; }
+    if (['permission', 'repick', 'external', 'missing', 'confirm', 'review'].indexOf(FileLink.status) >= 0) { emit(); return; }
     clearTimeout(timer);
     if (FileLink.status !== 'saving' && FileLink.status !== 'locked') setStatus('pending');
     timer = setTimeout(function () { FileLink.sync(); }, delay == null ? DELAY : delay);
@@ -129,6 +192,7 @@
         return write(link, bytes, opts, function (out) { return putCopy(out).then(function () { return true; }); });
       });
     }
+    if (!handle) { FileLink.dirty = true; setStatus('repick'); return Promise.resolve(false); }
     return permission(opts.gesture).then(function (ok) {
       if (!ok) { FileLink.dirty = true; setStatus('permission'); return false; }
       return handle.getFile().then(function (file) {
@@ -233,17 +297,89 @@
       sheets: o.analysis.sheets.filter(function (s) { return s.include && s.month.key; }).map(function (s) { return { name: s.name, month: s.month.key, layout: root.Importer.layoutOf(s) }; }),
       placed: o.placed, cancelsPlaced: o.cancelsPlaced, policies: Store.policies, customers: Store.customers, cancels: Store.cancellations
     });
-    // the same file imported again: policies it had before but has no longer were deleted in Excel
-    var missing = [];
+    if (o.hints) applyHints(link, o.hints, false);
+    // the same file imported again: what it had before but has no longer was deleted in Excel
+    var missing = { policies: [], cancels: [] };
     if (prev && sameFile(prev, o.name)) {
       var now = {};
-      Object.keys(link.sheets).forEach(function (n) { Object.keys(link.sheets[n].rows).forEach(function (id) { now[id] = true; }); });
+      Object.keys(link.sheets).forEach(function (n) {
+        Object.keys(link.sheets[n].rows).forEach(function (id) { now[id] = true; });
+        Object.keys(link.sheets[n].cancels).forEach(function (id) { now[id] = true; });
+      });
       Object.keys(prev.sheets || {}).forEach(function (n) {
-        Object.keys(prev.sheets[n].rows || {}).forEach(function (id) { if (!now[id] && Store.policies.has(id)) missing.push(id); });
+        Object.keys(prev.sheets[n].rows || {}).forEach(function (id) { if (!now[id] && Store.policies.has(id)) missing.policies.push(id); });
+        Object.keys(prev.sheets[n].cancels || {}).forEach(function (id) { if (!now[id] && Store.cancellations.has(id)) missing.cancels.push(id); });
       });
     }
-    return setLink(link, o, missing);
+    return setLink(link, o, missing.policies.length || missing.cancels.length ? missing : null);
   };
+
+  function byRow(a, b) { return a.row - b.row; }
+
+  /**
+   * The linked file read again after it was changed in Excel. Rows are lined up with the rows the app knows from
+   * its last save (rows may have been added, removed or edited since), so every known row keeps its policy or
+   * İptal record. Returns { anchors, keep, skip, fileVals, cancel… } for Store.importRecords and linkImport:
+   * anchors: row -> record; keep: records changed in the app since the last save (the app's version stays and
+   * is written back); skip: rows of records deleted in the app (they leave the file). null for any other file.
+   */
+  FileLink.hintsFor = function (name, analysis, built) {
+    var link = FileLink.link;
+    if (!link || !sameFile(link, name)) return null;
+    var Sync = root.ExcelSync, Importer = root.Importer;
+    var plan = currentPlan(link);
+    var pending = new Set(), xpending = new Set();
+    plan.sheets.forEach(function (s) {
+      s.rows.forEach(function (r) { if (r.from != null && r.keys.length) pending.add(r.id); });
+      s.cancels.forEach(function (r) { if (r.from != null && r.keys.length) xpending.add(r.id); });
+    });
+    var h = { anchors: new Map(), keep: new Set(), skip: new Set(), fileVals: new Map(), cancelAnchors: new Map(), cancelKeep: new Set(), cancelSkip: new Set(), cancelFileVals: new Map() };
+    analysis.sheets.forEach(function (s) {
+      var l = link.sheets[s.name];
+      if (!l || !s.include || !s.month.key || s.month.key !== l.month) return;
+      var layout = Importer.layoutOf(s);
+      var owned = Object.keys(l.rows || {}).map(function (id) { return { id: id, row: l.rows[id][0], vals: Sync.keyed(l.rows[id][1], l.layout) }; }).sort(byRow);
+      var recs = built.records.filter(function (r) { return r.sheet === s.name; }).sort(byRow).map(function (rec) {
+        var v = Sync.recordValues(rec, layout);
+        return { rec: rec, raw: v, vals: Sync.keyed(v, layout) };
+      });
+      Sync.align(owned, recs, 0.6).forEach(function (m) {
+        var o = owned[m[0]], x = recs[m[1]], key = s.name + '\u0001' + x.rec.row;
+        var p = Store.policies.get(o.id);
+        if (!p || p.month !== s.month.key) { h.skip.add(key); return; } // deleted or moved in the app: the row goes
+        h.anchors.set(key, o.id);
+        h.fileVals.set(o.id, x.raw);
+        if (pending.has(o.id)) h.keep.add(o.id);
+      });
+      if (!l.layout.block || !s.cancelBlock) return;
+      var block = layout.block;
+      var xowned = Object.keys(l.cancels || {}).map(function (id) { return { id: id, row: l.cancels[id][0], vals: Sync.keyedCancel(l.cancels[id][1], l.layout.block) }; }).sort(byRow);
+      var xrecs = built.cancels.filter(function (c) { return c.sheet === s.name; }).sort(byRow).map(function (c) {
+        var v = Sync.cancelValues(c, block);
+        return { rec: c, raw: v, vals: Sync.keyedCancel(v, block) };
+      });
+      Sync.align(xowned, xrecs, 0.5).forEach(function (m) {
+        var o = xowned[m[0]], x = xrecs[m[1]], key = s.name + '\u0001' + x.rec.row;
+        var c = Store.cancellations.get(o.id);
+        if (!c || c.month !== s.month.key) { h.cancelSkip.add(key); return; }
+        h.cancelAnchors.set(key, o.id);
+        h.cancelFileVals.set(o.id, x.raw);
+        if (xpending.has(o.id)) h.cancelKeep.add(o.id);
+      });
+    });
+    return h;
+  };
+
+  /** What the hints mean for the new link: kept records are written back, rows of deleted ones are removed. */
+  function applyHints(link, h, all) {
+    Object.keys(link.sheets).forEach(function (n) {
+      var s = link.sheets[n];
+      Object.keys(s.rows).forEach(function (id) { if ((all || h.keep.has(id)) && h.fileVals.has(id)) s.rows[id][1] = h.fileVals.get(id); });
+      Object.keys(s.cancels).forEach(function (id) { if ((all || h.cancelKeep.has(id)) && h.cancelFileVals.has(id)) s.cancels[id][1] = h.cancelFileVals.get(id); });
+    });
+    h.skip.forEach(function (key) { var k = key.split('\u0001'), s = link.sheets[k[0]]; if (s) s.rows['gone:' + k[1]] = [Number(k[1]), {}]; });
+    h.cancelSkip.forEach(function (key) { var k = key.split('\u0001'), s = link.sheets[k[0]]; if (s) s.cancels['gone:' + k[1]] = [Number(k[1]), []]; });
+  }
 
   function setLink(link, o, missing) {
     link.name = o.name;
@@ -258,10 +394,10 @@
     clearTimeout(retryTimer);
     FileLink.link = link;
     handle = o.handle || null;
-    FileLink.missing = missing && missing.length ? missing : null;
+    FileLink.missing = missing || null;
     FileLink.dirty = true;
     return DB.clear(DB.FILES).then(function () {
-      return Promise.all([saveLink(), DB.putRaw(DB.FILES, [{ key: 'handle', value: handle }]), link.kind === 'copy' ? putCopy(o.bytes) : null]);
+      return Promise.all([saveLink(), storeHandle(handle), link.kind === 'copy' ? putCopy(o.bytes) : null]);
     }).then(function () {
       return o.bytes ? keepVersion(o.bytes, 'linked') : null;
     }).then(function () {
@@ -272,18 +408,20 @@
     });
   }
 
-  /** After the file was imported again: the policies it no longer has are deleted here too, or written back. */
+  /** After the file was imported again: what it no longer has is deleted here too, or written back. */
   FileLink.resolveMissing = function (remove) {
-    var ids = FileLink.missing || [];
+    var m = FileLink.missing || { policies: [], cancels: [] };
     FileLink.missing = null;
     if (remove) {
       FileLink.hold();
-      ids.forEach(function (id) { if (Store.policies.has(id)) Store.deletePolicy(id); });
+      m.cancels.forEach(function (id) { if (Store.cancellations.has(id)) Store.deleteCancellation(id); });
+      m.policies.forEach(function (id) { if (Store.policies.has(id)) Store.deletePolicy(id); });
       FileLink.release();
     }
     setStatus('saved');
     return FileLink.sync({ gesture: true });
   };
+  FileLink.missingCount = function () { var m = FileLink.missing; return m ? m.policies.length + m.cancels.length : 0; };
 
   function cloneMap(m) { return new Map(Array.from(m.entries()).map(function (e) { return [e[0], JSON.parse(JSON.stringify(e[1]))]; })); }
 
@@ -295,18 +433,28 @@
     var XLSX = root.XLSX, Importer = root.Importer, Portfolio = root.Portfolio;
     var a = Importer.analyzeWorkbook(Importer.readWorkbook(new Uint8Array(bytes), XLSX, o.name), XLSX, { fileName: o.name, saved: Store.mappings });
     var built = Importer.buildRecords(a, { tidyNames: Store.settings.tidyNames !== false });
+    // the file this link already knows: its rows are lined up with the last save first
+    var hints = FileLink.hintsFor(o.name, a, built);
+    function free(r) { return !hints || (!hints.anchors.has(r.sheet + '\u0001' + r.row) && !hints.skip.has(r.sheet + '\u0001' + r.row)); }
+    function freeCancel(c) { return !hints || (!hints.cancelAnchors.has(c.sheet + '\u0001' + c.row) && !hints.cancelSkip.has(c.sheet + '\u0001' + c.row)); }
+    // the other rows: a dry run of the import on a copy of the data tells which policy each one is
     var state = { customers: cloneMap(Store.customers), policies: cloneMap(Store.policies) };
-    var res = Portfolio.importRecords(state, built.records, { fileName: o.name });
+    var res = Portfolio.importRecords(state, built.records.filter(free), { fileName: o.name });
     var placed = res.placed.filter(function (x) { return Store.policies.has(x.id); });
     var byKey = new Map();
     Store.cancellations.forEach(function (x) { var k = Portfolio.cancelKey(x); if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(x.id); });
     var cancelsPlaced = [];
-    built.cancels.forEach(function (c) { var l = byKey.get(Portfolio.cancelKey(c)); if (l && l.length) cancelsPlaced.push({ sheet: c.sheet, row: c.row, id: l.shift() }); });
-    // what the rows say now (the file's values): the first save writes wherever the app differs
+    built.cancels.filter(freeCancel).forEach(function (c) { var l = byKey.get(Portfolio.cancelKey(c)); if (l && l.length) cancelsPlaced.push({ sheet: c.sheet, row: c.row, id: l.shift() }); });
+    if (hints) {
+      hints.anchors.forEach(function (id, key) { var k = key.split('\u0001'); placed.push({ sheet: k[0], row: Number(k[1]), id: id }); });
+      hints.cancelAnchors.forEach(function (id, key) { var k = key.split('\u0001'); cancelsPlaced.push({ sheet: k[0], row: Number(k[1]), id: id }); });
+    }
+    // what the rows say now (the file's values): the first save writes the app's values wherever they differ
     var link = root.ExcelSync.createLink({
       sheets: a.sheets.filter(function (s) { return s.include && s.month.key; }).map(function (s) { return { name: s.name, month: s.month.key, layout: Importer.layoutOf(s) }; }),
       placed: placed, cancelsPlaced: cancelsPlaced, policies: state.policies, customers: state.customers, cancels: Store.cancellations
     });
+    if (hints) applyHints(link, hints, true);
     return setLink(link, o, null);
   }
 
@@ -338,12 +486,39 @@
 
   /** Asks for an Excel file: { file, handle }. Uses the browser's file picker that can also give write access. */
   FileLink.pick = function () {
-    return root.showOpenFilePicker({ types: [{ description: 'Excel', accept: {
+    return root.showOpenFilePicker({ id: 'sigorta-portfoy-excel', types: [{ description: 'Excel', accept: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'], 'application/vnd.ms-excel': ['.xls'],
       'application/vnd.ms-excel.sheet.macroEnabled.12': ['.xlsm'], 'application/vnd.oasis.opendocument.spreadsheet': ['.ods'], 'text/csv': ['.csv']
     } }], excludeAcceptAllOption: false, multiple: false }).then(function (list) {
       var h = list[0];
       return h.getFile().then(function (file) { return { file: file, handle: h }; });
+    });
+  };
+
+  /**
+   * This session has no handle for the linked file (see loadHandle): the user picks it once. The same file goes on
+   * as before; a file of another name is linked in its place only after a yes (onOther).
+   */
+  FileLink.repick = function (onOther) {
+    var link = FileLink.link;
+    if (!link) return Promise.resolve(false);
+    var picked;
+    return FileLink.pick().then(function (p) {
+      picked = p;
+      if (!sameFile(link, p.file.name)) {
+        return Promise.resolve(onOther ? onOther(p.file.name) : false).then(function (ok) {
+          if (!ok) return false;
+          if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
+          return p.file.arrayBuffer().then(function (bytes) {
+            return relinkFrom(bytes, { name: p.file.name, handle: p.handle, bytes: bytes, lastModified: p.file.lastModified, size: p.file.size });
+          });
+        });
+      }
+      handle = p.handle;
+      return storeHandle(handle).then(function () {
+        setStatus('saved');
+        return FileLink.sync({ gesture: true });
+      });
     });
   };
 
@@ -353,11 +528,9 @@
     return FileLink.pick().then(function (p) {
       picked = p;
       if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
-      return p.handle.requestPermission({ mode: 'readwrite' });
-    }).then(function (perm) {
-      if (perm !== 'granted') throw Object.assign(new Error('permission'), { code: 'permission' });
-      return picked.file.arrayBuffer();
+      return p.file.arrayBuffer();
     }).then(function (bytes) {
+      // write access is asked for by the first save (or by the notice, if the browser wants one more click)
       return relinkFrom(bytes, { name: picked.file.name, handle: picked.handle, bytes: bytes, lastModified: picked.file.lastModified, size: picked.file.size });
     });
   };
@@ -365,14 +538,14 @@
   /** A new .xlsx with every month of the app on its own page (the agency's yellow headers and İptal block). */
   FileLink.createNew = function (suggested) {
     var h;
-    return root.showSaveFilePicker({ suggestedName: suggested || 'sigorta-portfoy.xlsx', types: XLSX_TYPES }).then(function (x) {
+    return root.showSaveFilePicker({ id: 'sigorta-portfoy-excel', suggestedName: suggested || 'sigorta-portfoy.xlsx', types: XLSX_TYPES }).then(function (x) {
       h = x;
       var link = { sheets: {}, months: {}, name: h.name, kind: 'file', linkedAt: Date.now(), writes: 0 };
       clearTimeout(timer);
       FileLink.link = link;
       handle = h;
       FileLink.missing = null;
-      return DB.clear(DB.FILES).then(function () { return DB.putRaw(DB.FILES, [{ key: 'handle', value: h }]); }).then(function () {
+      return DB.clear(DB.FILES).then(function () { return storeHandle(h); }).then(function () {
         return write(link, null, {
           confirmed: true,
           // nothing to write yet: the file still needs one page, this month's
@@ -396,7 +569,7 @@
     FileLink.missing = null;
     FileLink.dirty = false;
     FileLink.deletes = 0;
-    return DB.clear(DB.FILES).then(function () { setStatus('off'); });
+    return Promise.all([DB.clear(DB.FILES), dropHandle()]).then(function () { setStatus('off'); });
   };
 
   /** The workbook with every change in it: { name, bytes } (a copy is brought up to date first). */
