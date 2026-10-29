@@ -61,12 +61,12 @@
     return null;
   }
   function handleStoreUsable() {
-    try { root.localStorage.getItem('x'); } catch (e) { return false; } // without the guard, no stored handle
-    return !!root.indexedDB && ls('sp:handle-off') !== chromeVersion();
+    try { root.localStorage.getItem('x'); if (!root.indexedDB) return false; } catch (e) { return false; } // without the guard, no stored handle
+    return ls('sp:handle-off') !== chromeVersion();
   }
   function handleDb() {
     return new Promise(function (resolve, reject) {
-      var r = root.indexedDB.open(HANDLE_DB, 1);
+      var r = root.indexedDB.open(HANDLE_DB, 1); // throws in a sandboxed frame: the promise rejects
       r.onupgradeneeded = function () { r.result.createObjectStore('h'); };
       r.onsuccess = function () { resolve(r.result); };
       r.onerror = function () { reject(r.error); };
@@ -75,9 +75,10 @@
   }
   function dropHandle() {
     return new Promise(function (resolve) {
-      if (!root.indexedDB) { resolve(); return; }
-      var r = root.indexedDB.deleteDatabase(HANDLE_DB);
-      r.onsuccess = r.onerror = r.onblocked = function () { resolve(); };
+      try {
+        var r = root.indexedDB.deleteDatabase(HANDLE_DB);
+        r.onsuccess = r.onerror = r.onblocked = function () { resolve(); };
+      } catch (e) { resolve(); } // no IndexedDB here (a sandboxed frame): nothing was kept
     });
   }
   function storeHandle(h) {
@@ -91,7 +92,7 @@
     }).catch(function () { /* the file is picked again next time */ });
   }
   function loadHandle() {
-    if (!root.indexedDB) return Promise.resolve(null);
+    try { if (!root.indexedDB) return Promise.resolve(null); } catch (e) { return Promise.resolve(null); }
     if (ls('sp:handle-reading')) {
       // the last start went down while reading the handle: never again on this browser version
       ls('sp:handle-reading', null);
