@@ -1,0 +1,197 @@
+{
+  "seed": 20261029,
+  "today": "2026-10-29",
+  "sheetMonths": {
+    "EKİM 2025": "2025-10",
+    "KASIM 2025": "2025-11",
+    "Aralık 2025": "2025-12",
+    "OCAK 2026": "2026-01",
+    "ŞUBAT 2026": "2026-02",
+    "MART": "2026-03",
+    "Nisan 2026": "2026-04",
+    "MAYIS 2026": "2026-05",
+    "Haziran 2026": "2026-06",
+    "Temmuz-2026": "2026-07",
+    "08.2026": "2026-08",
+    "EYLÜL 2026": "2026-09",
+    "Ekim 2026": "2026-10"
+  },
+  "months": {
+    "2025-10": {
+      "count": 55,
+      "premium": 1032277.0,
+      "commission": 131396.76,
+      "newBusiness": 29,
+      "card": 681191.76,
+      "account": 125102.75,
+      "cash": 225982.49
+    },
+    "2025-11": {
+      "count": 46,
+      "premium": 523673.25,
+      "commission": 67183.23,
+      "newBusiness": 17,
+      "card": 422590.4,
+      "account": 38800.75,
+      "cash": 62282.1
+    },
+    "2025-12": {
+      "count": 51,
+      "premium": 1305682.25,
+      "commission": 169211.71,
+      "newBusiness": 28,
+      "card": 732796.31,
+      "account": 330652.5,
+      "cash": 242233.44
+    },
+    "2026-01": {
+      "count": 33,
+      "premium": 466899.25,
+      "commission": 60684.21,
+      "newBusiness": 12,
+      "card": 176466.38,
+      "account": 72720.5,
+      "cash": 217712.37
+    },
+    "2026-02": {
+      "count": 60,
+      "premium": 825176.5,
+      "commission": 99832.33,
+      "newBusiness": 31,
+      "card": 542084.65,
+      "account": 84981.75,
+      "cash": 198110.1
+    },
+    "2026-03": {
+      "count": 64,
+      "premium": 1170970.75,
+      "commission": 154428.98,
+      "newBusiness": 32,
+      "card": 801334.13,
+      "account": 156461.75,
+      "cash": 213174.87
+    },
+    "2026-04": {
+      "count": 64,
+      "premium": 1306289.0,
+      "commission": 173244.98,
+      "newBusiness": 20,
+      "card": 930663.55,
+      "account": 157752.0,
+      "cash": 217873.45
+    },
+    "2026-05": {
+      "count": 62,
+      "premium": 1196739.25,
+      "commission": 168912.08,
+      "newBusiness": 28,
+      "card": 836690.0,
+      "account": 77122.25,
+      "cash": 282927.0
+    },
+    "2026-06": {
+      "count": 46,
+      "premium": 770213.75,
+      "commission": 99229.43,
+      "newBusiness": 24,
+      "card": 524623.8,
+      "account": 60971.0,
+      "cash": 184618.95
+    },
+    "2026-07": {
+      "count": 51,
+      "premium": 993503.5,
+      "commission": 132610.44,
+      "newBusiness": 25,
+      "card": 455923.49,
+      "account": 88091.0,
+      "cash": 449489.01
+    },
+    "2026-08": {
+      "count": 55,
+      "premium": 959996.5,
+      "commission": 132704.85,
+      "newBusiness": 24,
+      "card": 722464.48,
+      "account": 111734.0,
+      "cash": 125798.02
+    },
+    "2026-09": {
+      "count": 43,
+      "premium": 705093.75,
+      "commission": 92570.5,
+      "newBusiness": 21,
+      "card": 298417.98,
+      "account": 240482.0,
+      "cash": 166193.77
+    },
+    "2026-10": {
+      "count": 73,
+      "premium": 1680819.2,
+      "commission": 228722.78,
+      "newBusiness": 14,
+      "card": 1110372.57,
+      "account": 251999.37,
+      "cash": 318447.26
+    }
+  },
+  "totalPolicies": 703,
+  "totalCustomers": 320,
+  "multiMonthCustomers": 167,
+  "totalPremium": 12937333.95,
+  "totalCommission": 1710732.28,
+  "totalAccount": 1796871.62,
+  "newBusiness": 305,
+  "renewalsInFile": 26,
+  "homonyms": [
+    "Mehmet Yılmaz",
+    "Ayşe Kaya"
+  ],
+  "missingTcRows": 12,
+  "brokenTcRows": 3,
+  "showcase": {
+    "name": "Kemal Aydoğdu",
+    "tc": "51811886222",
+    "plate": "34 KMA 482",
+    "months": [
+      "2025-11",
+      "2026-01",
+      "2026-03",
+      "2026-06",
+      "2026-08"
+    ],
+    "policyCount": 6,
+    "premium": 83912.0
+  },
+  "dueIn30Days": 43,
+  "byKind": {
+    "trafik": 239,
+    "kasko": 111,
+    "imm": 18,
+    "dask": 116,
+    "konut": 51,
+    "tss": 69,
+    "saglik": 10,
+    "ferdi": 37,
+    "seyahat": 30,
+    "isyeri": 16,
+    "hayat": 6
+  },
+  "byInsurer": {
+    "Allianz": 93,
+    "Axa": 84,
+    "Anadolu": 85,
+    "Mapfre": 66,
+    "HDI": 46,
+    "Sompo": 51,
+    "Türkiye": 62,
+    "Ray": 30,
+    "Quick": 25,
+    "Neova": 27,
+    "Doğa": 33,
+    "Ankara": 23,
+    "Aksigorta": 44,
+    "Unico": 17,
+    "Bereket": 17
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "sigorta-portfoy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HTML insurance agency portfolio app: reads monthly production Excel files, matches customers across months, tracks renewals and collections.",
+  "license": "MIT",
+  "scripts": {
+    "sample": "python3 tools/generate_sample.py && node tools/build-sample-js.mjs",
+    "build": "node tools/build-single.mjs",
+    "test": "node --test tests/unit/*.test.js",
+    "test:e2e": "node --test --test-concurrency=1 tests/e2e/*.test.mjs",
+    "test:all": "npm test && npm run test:e2e",
+    "serve": "node tools/serve.mjs"
+  }
+}
