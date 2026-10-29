@@ -9,8 +9,12 @@
 
   // ------------------------------------------------------------------ exports
   function save(wb, name) {
-    if (App.embedded) { UI.toast(t('export.blocked'), { type: 'info', timeout: 6000 }); return; }
     try {
+      if (App.embedded) {
+        var bytes = window.XLSX.write(wb, { type: 'array', compression: true, bookType: 'xlsx' });
+        App.viewerSave(name, bytes, function () { UI.toast(t('export.done', { file: name })); });
+        return;
+      }
       Exporter.writeFile(window.XLSX, wb, name);
       UI.toast(t('export.done', { file: name }));
     } catch (e) {
@@ -88,10 +92,11 @@
 
   App.exportBackup = function () {
     var json = JSON.stringify(Store.backup(), null, 1);
-    if (App.embedded) { UI.toast(t('export.blocked'), { type: 'info', timeout: 6000 }); return; }
-    UI.download(new Blob([json], { type: 'application/json' }), 'sigorta-portfoy-yedek-' + stamp() + '.json');
-    Store.markBackup();
-    UI.toast(t('settings.backupDone'));
+    var name = 'sigorta-portfoy-yedek-' + stamp() + '.json';
+    function done() { Store.markBackup(); UI.toast(t('settings.backupDone')); }
+    if (App.embedded) { App.viewerSave(name, json, done); return; }
+    UI.download(new Blob([json], { type: 'application/json' }), name);
+    done();
   };
 
   // ------------------------------------------------------------------ reports view

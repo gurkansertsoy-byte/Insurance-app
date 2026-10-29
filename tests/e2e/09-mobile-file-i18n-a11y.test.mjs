@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, waitHash, loadDemo, go, text, expected, store } from './helpers.mjs';
+import path from 'node:path';
+import { setup, waitHash, loadDemo, go, text, expected, store, readBook, sheetRows, ROOT } from './helpers.mjs';
 
 const PAGES = ['panel', 'musteriler', 'policeler', 'aylar', 'ay-2026-10', 'yenilemeler', 'tahsilat', 'gorevler', 'raporlar', 'ice-aktar', 'ayarlar', 'yeni'];
 const KEY_RE = /\b(app|nav|common|field|id|search|period|days|state|chart|table|dash|opp|customers|customer|policy|form|policies|pay|months|renewals|collections|tasks|reports|report|export|import|dup|activity|settings)\.[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)?\b/;
@@ -90,6 +91,68 @@ test('on a busy computer, opening a dialog never pulls the focus away from the f
     await page.fill('#f-policyType', 'Trafik');
     await page.waitForTimeout(700);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'f-policyType');
+    assert.deepEqual(env.errors, []);
+  } finally { await env.close(); }
+});
+
+test('inside a preview frame: files go through the viewer\'s save dialog, or the app explains why it cannot save', async () => {
+  const env = await setup();
+  try {
+    const { page } = env;
+    // host and app on two origins, both served by the test (Chromium will not let a page frame a local address)
+    const base = 'http://app.test/';
+    await page.route(base + '**', (r) => {
+      const p = decodeURIComponent(new URL(r.request().url()).pathname);
+      r.fulfill({ path: path.join(ROOT, p === '/' ? 'index.html' : p) });
+    });
+    // the claude.ai viewer gives framed pages window.claude.use('downloads') -> save({ filename, data }) behind a confirmation
+    await page.addInitScript((origin) => {
+      if (location.origin !== origin) return;
+      window.__saves = []; window.__answer = 'saved'; window.__noViewer = false;
+      const downloads = Object.freeze({ save: (req) => {
+        window.__saves.push(req);
+        return window.__answer === 'saved' ? Promise.resolve({ status: 'saved' }) : Promise.reject({ code: window.__answer, message: '' });
+      } });
+      window.claude = { use: (name) => Promise.resolve(name === 'downloads' && !window.__noViewer ? downloads : null) };
+    }, new URL(base).origin);
+    const host = 'http://host.test/';
+    await page.route(host, (r) => r.fulfill({ contentType: 'text/html', body: `<!doctype html><body style="margin:0"><iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups" src="${base}" style="border:0;width:100vw;height:100vh"></iframe></body>` }));
+    await page.goto(host);
+    const frame = await (await page.waitForSelector('iframe')).contentFrame();
+    await frame.waitForSelector('#try-demo');
+    await frame.click('#try-demo');
+    await frame.waitForSelector('#sheet-table');
+    await frame.click('#import-run');
+    await frame.waitForSelector('#import-done');
+    const showId = await frame.evaluate((n) => Array.from(Store.customers.values()).find(c => c.name === n).id, expected.showcase.name);
+    await go(frame, 'musteri-' + showId);
+    assert.equal(await frame.$('#cust-print'), null, 'no print button where printing cannot work');
+    // Excel export: handed to the viewer, a real workbook
+    await go(frame, 'musteriler');
+    await frame.click('#customers-export');
+    await frame.waitForFunction(() => window.__saves.length === 1);
+    const xlsx = await frame.evaluate(() => { const s = window.__saves[0]; const b = new Uint8Array(s.data); let bin = ''; for (let i = 0; i < b.length; i += 8192) bin += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return { filename: s.filename, b64: btoa(bin) }; });
+    assert.match(xlsx.filename, /^musteriler-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    assert.equal(sheetRows(readBook(Buffer.from(xlsx.b64, 'base64')), 'Müşteriler').length, expected.totalCustomers + 1);
+    await frame.waitForSelector('.toast:has-text("Dosya hazırlandı")');
+    // backup: declined leaves "last backup" alone; accepted records it
+    await go(frame, 'ayarlar');
+    await frame.evaluate(() => { window.__answer = 'declined'; });
+    await frame.click('#backup-btn');
+    await frame.waitForFunction(() => window.__saves.length === 2);
+    await frame.waitForTimeout(200);
+    assert.equal(await frame.evaluate(() => Store.settings.lastBackupAt || null), null);
+    await frame.evaluate(() => { window.__answer = 'saved'; });
+    await frame.click('#backup-btn');
+    await frame.waitForFunction(() => window.__saves.length === 3 && Store.settings.lastBackupAt);
+    const backup = JSON.parse(await frame.evaluate(() => window.__saves[2].data));
+    assert.equal(backup.policies.length, expected.totalPolicies);
+    assert.match(backup.app, /sigorta-portfoy/);
+    // a frame with no save dialog: the app says so instead of failing silently
+    await frame.evaluate(() => { window.__noViewer = true; });
+    await frame.click('#export-all');
+    await frame.waitForSelector('.toast:has-text("dosya indirme kapalı")');
+    assert.equal(await frame.evaluate(() => window.__saves.length), 3);
     assert.deepEqual(env.errors, []);
   } finally { await env.close(); }
 });

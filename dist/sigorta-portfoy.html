@@ -3750,7 +3750,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     'reports.emptyTitle': 'Rapor için veri yok', 'reports.emptyText': 'Önce Excel dosyanızı aktarın.',
     'report.category': 'Branş', 'report.share': 'Pay', 'report.commRate': 'Komisyon oranı', 'report.newShare': 'Yeni iş payı', 'report.pcs': 'adet', 'report.people': 'kişi',
 
-    'export.done': 'Dosya hazırlandı: {file}', 'export.failed': 'Dosya oluşturulamadı.',
+    'export.done': 'Dosya hazırlandı: {file}', 'export.busy': 'Bir kaydetme penceresi zaten açık.', 'export.failed': 'Dosya oluşturulamadı.',
     'export.blocked': 'Bu önizlemede dosya indirme kapalı. Uygulamayı bilgisayarınızda açınca dışa aktarma çalışır.',
 
     'import.sub': 'Her sayfası bir ay olan üretim dosyanızı aktarın',
@@ -4063,7 +4063,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
     'reports.emptyTitle': 'No data to report', 'reports.emptyText': 'Import your Excel file first.',
     'report.category': 'Line', 'report.share': 'Share', 'report.commRate': 'Commission rate', 'report.newShare': 'New business share', 'report.pcs': 'pcs', 'report.people': 'people',
 
-    'export.done': 'File ready: {file}', 'export.failed': 'The file could not be created.',
+    'export.done': 'File ready: {file}', 'export.busy': 'A save prompt is already open.', 'export.failed': 'The file could not be created.',
     'export.blocked': 'Downloads are disabled in this preview. Export works when you open the app on your computer.',
 
     'import.sub': 'Import your production file where each sheet is a month',
@@ -5026,6 +5026,26 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
   App.views = App.views || {};
   App.viewState = {};
   App.embedded = (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
+
+  /**
+   * Inside a frame the browser will not download files. The claude.ai viewer offers its own save
+   * dialog instead (the "downloads" capability); in any other frame the app says exporting needs
+   * the app opened on its own. onSaved runs only when the viewer accepted the file.
+   */
+  App.viewerSave = function (name, data, onSaved) {
+    var c = window.claude;
+    var saver = c && typeof c.use === 'function' ? c.use('downloads') : Promise.resolve(null);
+    saver.then(function (d) {
+      if (!d) throw { code: 'unavailable' };
+      return d.save({ filename: name, data: data });
+    }).then(function (r) { if (r && r.status === 'saved' && onSaved) onSaved(); }, function (e) {
+      var code = e && e.code;
+      if (code === 'declined') return; // the viewer said no
+      if (code === 'rate_limited') { UI.toast(UI.t('export.busy'), { type: 'info' }); return; }
+      if (code === 'bad_request' || code === 'transform_error' || code === 'too_large') { console.error(e); UI.toast(UI.t('export.failed'), { type: 'bad' }); return; }
+      UI.toast(UI.t('export.blocked'), { type: 'info', timeout: 6000 });
+    });
+  };
 
   var NAV = [
     { id: 'panel', icon: 'layout-dashboard', label: 'nav.dashboard' },
@@ -7403,8 +7423,12 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
 
   // ------------------------------------------------------------------ exports
   function save(wb, name) {
-    if (App.embedded) { UI.toast(t('export.blocked'), { type: 'info', timeout: 6000 }); return; }
     try {
+      if (App.embedded) {
+        var bytes = window.XLSX.write(wb, { type: 'array', compression: true, bookType: 'xlsx' });
+        App.viewerSave(name, bytes, function () { UI.toast(t('export.done', { file: name })); });
+        return;
+      }
       Exporter.writeFile(window.XLSX, wb, name);
       UI.toast(t('export.done', { file: name }));
     } catch (e) {
@@ -7482,10 +7506,11 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAOpSXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
 
   App.exportBackup = function () {
     var json = JSON.stringify(Store.backup(), null, 1);
-    if (App.embedded) { UI.toast(t('export.blocked'), { type: 'info', timeout: 6000 }); return; }
-    UI.download(new Blob([json], { type: 'application/json' }), 'sigorta-portfoy-yedek-' + stamp() + '.json');
-    Store.markBackup();
-    UI.toast(t('settings.backupDone'));
+    var name = 'sigorta-portfoy-yedek-' + stamp() + '.json';
+    function done() { Store.markBackup(); UI.toast(t('settings.backupDone')); }
+    if (App.embedded) { App.viewerSave(name, json, done); return; }
+    UI.download(new Blob([json], { type: 'application/json' }), name);
+    done();
   };
 
   // ------------------------------------------------------------------ reports view

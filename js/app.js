@@ -9,6 +9,26 @@
   App.viewState = {};
   App.embedded = (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
 
+  /**
+   * Inside a frame the browser will not download files. The claude.ai viewer offers its own save
+   * dialog instead (the "downloads" capability); in any other frame the app says exporting needs
+   * the app opened on its own. onSaved runs only when the viewer accepted the file.
+   */
+  App.viewerSave = function (name, data, onSaved) {
+    var c = window.claude;
+    var saver = c && typeof c.use === 'function' ? c.use('downloads') : Promise.resolve(null);
+    saver.then(function (d) {
+      if (!d) throw { code: 'unavailable' };
+      return d.save({ filename: name, data: data });
+    }).then(function (r) { if (r && r.status === 'saved' && onSaved) onSaved(); }, function (e) {
+      var code = e && e.code;
+      if (code === 'declined') return; // the viewer said no
+      if (code === 'rate_limited') { UI.toast(UI.t('export.busy'), { type: 'info' }); return; }
+      if (code === 'bad_request' || code === 'transform_error' || code === 'too_large') { console.error(e); UI.toast(UI.t('export.failed'), { type: 'bad' }); return; }
+      UI.toast(UI.t('export.blocked'), { type: 'info', timeout: 6000 });
+    });
+  };
+
   var NAV = [
     { id: 'panel', icon: 'layout-dashboard', label: 'nav.dashboard' },
     { id: 'musteriler', icon: 'users', label: 'nav.customers', count: function () { return Store.customers.size; } },

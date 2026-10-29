@@ -230,7 +230,7 @@
     'reports.emptyTitle': 'Rapor için veri yok', 'reports.emptyText': 'Önce Excel dosyanızı aktarın.',
     'report.category': 'Branş', 'report.share': 'Pay', 'report.commRate': 'Komisyon oranı', 'report.newShare': 'Yeni iş payı', 'report.pcs': 'adet', 'report.people': 'kişi',
 
-    'export.done': 'Dosya hazırlandı: {file}', 'export.failed': 'Dosya oluşturulamadı.',
+    'export.done': 'Dosya hazırlandı: {file}', 'export.busy': 'Bir kaydetme penceresi zaten açık.', 'export.failed': 'Dosya oluşturulamadı.',
     'export.blocked': 'Bu önizlemede dosya indirme kapalı. Uygulamayı bilgisayarınızda açınca dışa aktarma çalışır.',
 
     'import.sub': 'Her sayfası bir ay olan üretim dosyanızı aktarın',
@@ -543,7 +543,7 @@
     'reports.emptyTitle': 'No data to report', 'reports.emptyText': 'Import your Excel file first.',
     'report.category': 'Line', 'report.share': 'Share', 'report.commRate': 'Commission rate', 'report.newShare': 'New business share', 'report.pcs': 'pcs', 'report.people': 'people',
 
-    'export.done': 'File ready: {file}', 'export.failed': 'The file could not be created.',
+    'export.done': 'File ready: {file}', 'export.busy': 'A save prompt is already open.', 'export.failed': 'The file could not be created.',
     'export.blocked': 'Downloads are disabled in this preview. Export works when you open the app on your computer.',
 
     'import.sub': 'Import your production file where each sheet is a month',
