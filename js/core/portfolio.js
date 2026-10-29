@@ -295,7 +295,8 @@
     policies.forEach(function (p) {
       var i = info.get(p.id);
       if (!i || !p.endDate || i.state === 'short' || i.state === 'none') return;
-      if (p.endDate > today || (from && p.endDate < from) || (to && p.endDate > to)) return;
+      // a policy that ends today can still be renewed today, so only past expiries count
+      if (p.endDate >= today || (from && p.endDate < from) || (to && p.endDate > to)) return;
       base++;
       if (i.state === 'renewed') renewed++;
     });

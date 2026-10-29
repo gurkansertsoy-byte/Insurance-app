@@ -52,10 +52,10 @@
       var themeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': t('app.theme') }, ['system', 'light', 'dark'].map(function (th) {
         return h('button', { type: 'button', id: 'theme-' + th, 'aria-pressed': String((s.theme || 'system') === th), onClick: function () { Store.setSetting('theme', th); } }, t('settings.theme.' + th));
       }));
-      var langSel = UI.select('set-lang', [{ value: 'tr', label: 'Türkçe' }, { value: 'en', label: 'English' }], window.I18N.lang, { class: 'input', style: { width: 'auto' }, onChange: function (e) { window.I18N.setLang(e.target.value); Store.setSetting('lang', e.target.value); } });
-      var pageSel = UI.select('set-page', [25, 50, 100, 200].map(function (n) { return { value: n, label: String(n) }; }), s.pageSize, { class: 'input', style: { width: 'auto' }, onChange: function (e) { Store.setSetting('pageSize', Number(e.target.value)); } });
+      var langSel = UI.select('set-lang', [{ value: 'tr', label: 'Türkçe' }, { value: 'en', label: 'English' }], window.I18N.lang, { class: 'input', style: { width: 'auto' }, 'aria-label': t('settings.language'), onChange: function (e) { window.I18N.setLang(e.target.value); Store.setSetting('lang', e.target.value); } });
+      var pageSel = UI.select('set-page', [25, 50, 100, 200].map(function (n) { return { value: n, label: String(n) }; }), s.pageSize, { class: 'input', style: { width: 'auto' }, 'aria-label': t('settings.pageSize'), onChange: function (e) { Store.setSetting('pageSize', Number(e.target.value)); } });
       var mask = h('input', { type: 'checkbox', id: 'set-mask', checked: !!s.maskIds, onChange: function (e) { Store.setSetting('maskIds', e.target.checked); } });
-      var win = UI.select('set-window', [15, 30, 45, 60, 90].map(function (n) { return { value: n, label: t('settings.days', { n: n }) }; }), s.renewalWindow, { class: 'input', style: { width: 'auto' }, onChange: function (e) { Store.setSetting('renewalWindow', Number(e.target.value)); } });
+      var win = UI.select('set-window', [15, 30, 45, 60, 90].map(function (n) { return { value: n, label: t('settings.days', { n: n }) }; }), s.renewalWindow, { class: 'input', style: { width: 'auto' }, 'aria-label': t('settings.window'), onChange: function (e) { Store.setSetting('renewalWindow', Number(e.target.value)); } });
       var appearance = h('section', { class: 'card', id: 'settings-appearance' },
         h('div', { class: 'card-head' }, h('h2', null, t('settings.appearance'))),
         h('div', { class: 'card-body' },
@@ -66,7 +66,7 @@
           setting(t('settings.window'), t('settings.windowSub'), win)));
 
       // WhatsApp template
-      var tpl = h('textarea', { id: 'set-template', class: 'input', rows: 4, style: { height: 'auto', padding: '9px 11px' } }, s.waTemplate || t('settings.waDefault'));
+      var tpl = h('textarea', { id: 'set-template', class: 'input', rows: 4, 'aria-label': t('settings.template'), style: { height: 'auto', padding: '9px 11px' } }, s.waTemplate || t('settings.waDefault'));
       var previewEl = h('div', { class: 'callout', id: 'tpl-preview' });
       function drawPreview() {
         UI.clear(previewEl);

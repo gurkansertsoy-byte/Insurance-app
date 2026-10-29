@@ -137,7 +137,7 @@
       });
       var countEl = h('span', { class: 'result-count', id: 'renewals-count' }, t('renewals.count', { n: F.num(rows.length) }));
       var toolbar = h('div', { class: 'toolbar' },
-        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'renewals-q', value: vs.q, placeholder: t('renewals.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) {
+        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'renewals-q', value: vs.q, placeholder: t('renewals.searchPh'), 'aria-label': t('renewals.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) {
           vs.q = e.target.value;
           rows = filterRows();
           table.setRows(rows);
@@ -240,7 +240,7 @@
         ['open', 'paid', 'all'].map(function (f) {
           return h('button', { type: 'button', class: 'filter-chip', id: 'coll-' + f, 'aria-pressed': String(vs.filter === f), onClick: function () { vs.filter = f; App.refresh(); } }, t('collections.f.' + f));
         }),
-        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'collections-q', value: vs.q, placeholder: t('collections.searchPh'), autocomplete: 'off', onChange: function (e) { vs.q = e.target.value; App.refresh(); } })));
+        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'collections-q', value: vs.q, placeholder: t('collections.searchPh'), 'aria-label': t('collections.searchPh'), autocomplete: 'off', onChange: function (e) { vs.q = e.target.value; App.refresh(); } })));
       var history = h('section', { class: 'card' },
         h('div', { class: 'card-head' }, h('h2', null, t('collections.history')), h('span', { class: 'sub' }, t('collections.historySub', { n: F.num(payments.length) }))),
         h('div', { class: 'card-body flush', style: { marginTop: '8px' } }, payments.length ? h('div', { class: 'list' }, payments.slice(0, 30).map(function (x) {
@@ -312,8 +312,8 @@
       };
       Object.keys(groups).forEach(function (k) { groups[k].sort(function (a, b) { return k === 'done' ? (b.doneAt || 0) - (a.doneAt || 0) : U.cmp(a.due, b.due) || (a.createdAt - b.createdAt); }); });
       if (vs.tab === 'today' && !groups.today.length && groups.overdue.length) vs.tab = 'overdue';
-      var quickTitle = h('input', { id: 'quick-task', class: 'input', placeholder: t('tasks.quickPh'), autocomplete: 'off', style: { flex: '1 1 260px', width: 'auto' } });
-      var quickDue = h('input', { id: 'quick-due', class: 'input', type: 'date', value: today, style: { width: 'auto' } });
+      var quickTitle = h('input', { id: 'quick-task', class: 'input', placeholder: t('tasks.quickPh'), 'aria-label': t('tasks.what'), autocomplete: 'off', style: { flex: '1 1 260px', width: 'auto' } });
+      var quickDue = h('input', { id: 'quick-due', class: 'input', type: 'date', value: today, 'aria-label': t('tasks.due'), style: { width: 'auto' } });
       var quick = h('form', { class: 'card', onSubmit: function (e) {
         e.preventDefault();
         if (!U.collapse(quickTitle.value)) { quickTitle.focus(); return; }

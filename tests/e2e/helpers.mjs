@@ -63,6 +63,15 @@ export async function go(page, hash) {
   }), hash);
 }
 
+/** Waits until the view for this hash (string or RegExp) has rendered. */
+export async function waitHash(page, want) {
+  const isRe = want instanceof RegExp;
+  await page.waitForFunction(([s, re]) => {
+    const h = window.App && window.App.renderedHash;
+    return h != null && (re ? new RegExp(s).test(h) : h === s);
+  }, [isRe ? want.source : want, isRe]);
+}
+
 export async function text(page, selector) {
   return (await page.textContent(selector)).replace(/\s+/g, ' ').trim();
 }

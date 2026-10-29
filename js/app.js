@@ -78,7 +78,7 @@
     els.themeBtn = h('button', { type: 'button', class: 'icon-btn', id: 'theme-btn', onClick: cycleTheme });
     els.langBtn = h('button', { type: 'button', class: 'icon-btn lang-btn', id: 'lang-btn', onClick: toggleLang });
     els.newBtn = h('a', { class: 'btn btn-primary new-btn', href: '#yeni', id: 'new-btn' }, icon('plus'), h('span', null));
-    els.menuBtn = h('button', { type: 'button', class: 'icon-btn menu-btn', 'aria-controls': 'sidebar', 'aria-expanded': 'false', onClick: function () { setNav(!els.app.classList.contains('nav-open')); } }, icon('menu'));
+    els.menuBtn = h('button', { type: 'button', class: 'icon-btn menu-btn', 'aria-controls': 'sidebar', 'aria-expanded': 'false', 'aria-label': t('nav.menu'), onClick: function () { setNav(!els.app.classList.contains('nav-open')); } }, icon('menu'));
     els.topbar = h('header', { class: 'topbar' }, els.menuBtn, h('div', { class: 'topbar-title' }, els.title, els.sub), els.search, els.newBtn, els.langBtn, els.themeBtn);
     els.content = h('main', { class: 'content', id: 'content', tabindex: '-1' });
     els.scrim = h('div', { class: 'scrim', hidden: true, onClick: function () { setNav(false); } });
@@ -219,6 +219,7 @@
           pop.appendChild(it.el);
         });
       }
+      pop.dataset.q = U.collapse(q);
       if (!items.length) pop.appendChild(h('div', { class: 'search-empty' }, t('search.noResults', { q: U.collapse(q) })));
       else {
         var all = { href: 'musteriler' };
@@ -267,6 +268,7 @@
     if (opts.keepScroll && !changed) window.scrollTo(0, y);
     else if (changed) { window.scrollTo(0, 0); if (opts.focus !== false) els.content.focus({ preventScroll: true }); }
     if (view.after) view.after(route);
+    App.renderedHash = location.hash; // lets tests wait for the render, not just the URL
   };
 
   App.refresh = function () { App.render({ keepScroll: true }); };

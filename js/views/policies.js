@@ -114,7 +114,7 @@
       }
       var months = App.monthOptions(t('policies.anyMonth'));
       var toolbar = h('div', { class: 'toolbar' },
-        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'policies-q', value: vs.q, placeholder: t('policies.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) })),
+        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'policies-q', value: vs.q, placeholder: t('policies.searchPh'), 'aria-label': t('policies.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) })),
         h('label', { class: 'small muted', for: 'policies-from' }, t('common.from')),
         UI.select('policies-from', months, vs.from, { onChange: function (e) { vs.from = e.target.value; apply(); } }),
         h('label', { class: 'small muted', for: 'policies-to' }, t('common.to')),
@@ -261,7 +261,7 @@
           return Charts.miniTable([{ label: t('field.company'), value: function (x) { return x.key === '—' ? t('common.unknown') : (d.companyNames.get(x.key) || x.key); } }, { label: t('dash.metric.count'), align: 'r', value: function (x) { return F.num(x.count); } }, { label: t('dash.metric.premium'), align: 'r', value: function (x) { return F.money(x.premium); } }], comps);
         } }));
       var actions = h('div', { class: 'toolbar' },
-        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'month-q', value: vs.q, placeholder: t('months.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) })),
+        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'month-q', value: vs.q, placeholder: t('months.searchPh'), 'aria-label': t('months.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) })),
         h('a', { class: 'btn btn-sm btn-primary', href: '#yeni-ay-' + r.key, id: 'month-add' }, icon('plus'), t('months.addHere')),
         h('button', { type: 'button', class: 'btn btn-sm', id: 'month-export', onClick: function () { App.exportMonths([r.key]); } }, icon('file-down'), t('months.export')),
         h('button', { type: 'button', class: 'btn btn-sm btn-danger', id: 'month-delete', onClick: function () {

@@ -13,7 +13,7 @@
       netPremium: '', card: '', account: '', cash: '', note: '', extras: {}, endAuto: true };
   }
 
-  function moneyStr(v) { return v == null || v === '' ? '' : String(v).replace('.', ','); }
+  function moneyStr(v) { return v == null || v === '' ? '' : U.fmtNumber(Number(v), window.I18N.lang, 2); }
 
   function draftFrom(route) {
     var d = { key: location.hash, customerId: null, customer: {}, policy: blankPolicy(route.month), editCustomer: false, keepCustomer: false };

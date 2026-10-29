@@ -95,6 +95,8 @@
         }
         var main = U.normalizePhone(f.phone.value);
         var others = f.phones.value.split(/[,;\n]/).map(U.normalizePhone).filter(function (x) { return x.length >= 7; });
+        // a replaced main number stays as another phone, so later Excel rows with it still match
+        if (c.phone && c.phone !== main) others.push(c.phone);
         var phones = [main].concat(others).filter(function (x, i, a) { return x && a.indexOf(x) === i; });
         var saved = Store.saveCustomer({
           id: c.id, name: f.name.value, tc: f.tc.value, phone: main, phones: phones, email: f.email.value,
@@ -222,7 +224,7 @@
         table.setRows(rows);
         count.textContent = t('customers.count', { n: F.num(rows.length) });
       }
-      var search = h('input', { type: 'search', id: 'customers-q', value: vs.q, placeholder: t('customers.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) });
+      var search = h('input', { type: 'search', id: 'customers-q', value: vs.q, placeholder: t('customers.searchPh'), 'aria-label': t('customers.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) });
       function chip(key, label) {
         return h('button', { type: 'button', class: 'filter-chip', 'aria-pressed': String(!!vs[key]), id: 'chip-' + key, onClick: function (e) {
           vs[key] = !vs[key]; e.currentTarget.setAttribute('aria-pressed', String(vs[key])); apply();
@@ -466,8 +468,8 @@
             } }, icon('list-checks'), t('customer.makeTask')));
         })) : UI.empty({ icon: 'circle-check', title: t('customer.noOpps'), text: t('customer.noOppsText') });
       } else if (vs.tab === 'notes') {
-        var kind = UI.select('note-kind', NOTE_KINDS.map(function (k) { return { value: k, label: t('activity.' + k) }; }), vs.noteKind, { class: 'input', style: { width: 'auto' }, onChange: function (e) { vs.noteKind = e.target.value; } });
-        var text = h('textarea', { id: 'note-text', class: 'input', rows: 2, placeholder: t('customer.notePh'), style: { height: 'auto', padding: '9px 11px' } });
+        var kind = UI.select('note-kind', NOTE_KINDS.map(function (k) { return { value: k, label: t('activity.' + k) }; }), vs.noteKind, { class: 'input', style: { width: 'auto' }, 'aria-label': t('customer.noteKind'), onChange: function (e) { vs.noteKind = e.target.value; } });
+        var text = h('textarea', { id: 'note-text', class: 'input', rows: 2, placeholder: t('customer.notePh'), 'aria-label': t('customer.addNote'), style: { height: 'auto', padding: '9px 11px' } });
         panel = h('div', { style: { padding: '16px 18px' }, class: 'stack' },
           h('form', { class: 'stack', style: { gap: '8px' }, onSubmit: function (e) {
             e.preventDefault();

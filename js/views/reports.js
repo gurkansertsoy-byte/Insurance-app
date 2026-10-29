@@ -219,7 +219,7 @@
         ], byCust)));
       // retention by expiry month
       var expRows = [];
-      var byExp = U.groupBy(d.policies.filter(function (p) { var i = d.renewal.get(p.id); return p.endDate && p.endDate <= d.today && i && i.state !== 'short' && i.state !== 'none'; }), function (p) { return U.monthKeyOf(p.endDate); });
+      var byExp = U.groupBy(d.policies.filter(function (p) { var i = d.renewal.get(p.id); return p.endDate && p.endDate < d.today && i && i.state !== 'short' && i.state !== 'none'; }), function (p) { return U.monthKeyOf(p.endDate); });
       Array.from(byExp.keys()).sort().slice(-12).forEach(function (k) {
         var ps = byExp.get(k);
         var ren = ps.filter(function (p) { return d.renewal.get(p.id).state === 'renewed'; }).length;

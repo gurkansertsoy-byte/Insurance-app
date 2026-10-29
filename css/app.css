@@ -271,7 +271,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .topbar-title { min-width: 0; }
 .topbar-title h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-sub { font-size: 12.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.menu-btn { display: none; }
+.icon-btn.menu-btn { display: none; }
 .content {
   flex: 1;
   width: 100%;
@@ -712,14 +712,15 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
   .settings-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 900px) {
-  .menu-btn { display: inline-grid; }
+  .icon-btn.menu-btn { display: inline-grid; }
   .app { background: var(--bg); }
   .sidebar {
-    position: fixed; inset: 0 auto 0 0; height: 100%; transform: translateX(-102%); transition: transform 0.2s ease;
+    position: fixed; inset: 0 auto 0 0; height: 100%; transform: translateX(-102%);
+    visibility: hidden; transition: transform 0.2s ease, visibility 0s linear 0.2s;
     padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px);
     width: calc(var(--nav-w) + env(safe-area-inset-left, 0px));
   }
-  .app.nav-open .sidebar { transform: none; box-shadow: var(--shadow-2); }
+  .app.nav-open .sidebar { transform: none; box-shadow: var(--shadow-2); visibility: visible; transition: transform 0.2s ease, visibility 0s; }
   .grid-2, .grid-3 { grid-template-columns: minmax(0, 1fr); }
   .welcome { grid-template-columns: minmax(0, 1fr); }
   .welcome-side { border-left: 0; border-top: 1px solid var(--border); }
