@@ -170,7 +170,8 @@
       var st = FileLink.status;
       var pill = l.kind === 'copy' ? UI.pill(t('xl.pill.copy'), 'plain')
         : st === 'saved' ? UI.pill(t('xl.pill.on'), 'good') : st === 'pending' || st === 'saving' ? UI.pill(t('xl.foot.' + st), 'warn') : UI.pill(t('xl.foot.' + st), 'bad');
-      body.appendChild(settingRow(h('span', { class: 'xl-file' }, icon('file-spreadsheet'), ' ', h('strong', { id: 'xl-name' }, l.name)), t(l.kind === 'copy' ? 'xl.card.mode.copy' : 'xl.card.mode.file'), pill, 'xl-file-row'));
+      body.appendChild(settingRow(h('span', { class: 'xl-file' }, icon('file-spreadsheet'), ' ', h('strong', { id: 'xl-name' }, l.name)),
+        t(l.kind === 'copy' ? 'xl.card.mode.copy' : 'xl.card.mode.file') + (l.original ? ' ' + t('xl.card.original', { name: l.original }) : ''), pill, 'xl-file-row'));
       body.appendChild(settingRow(t('xl.card.last'), l.kind === 'copy' ? t('xl.card.lastCopy') : t('xl.card.linkedAt', { when: when(l.linkedAt) }),
         h('span', { class: 'small', id: 'xl-last' }, l.kind === 'copy' ? (FileLink.dirty ? t('xl.card.copyDirty') : t('xl.card.copyClean')) : when(l.lastSyncAt))));
       if (FileLink.skipped) body.appendChild(h('div', { class: 'callout warn small' }, icon('triangle-alert'), h('span', null, t('xl.card.skipped', { n: FileLink.skipped }))));
@@ -204,12 +205,13 @@
   /** The "save into this file" option of the import preview. */
   App.excelImportOption = function (vs) {
     var writable = FileLink.writableName(vs.file.name);
-    var direct = writable && !!vs.handle && FileLink.canWrite();
+    var direct = writable && FileLink.canWrite() && !vs.sample;
     var box = h('div', { class: 'stack', style: { gap: '8px' }, id: 'autosave-box' });
     var check = h('input', { type: 'checkbox', id: 'opt-autosave', checked: writable && !!vs.autosave, disabled: !writable, onChange: function (e) { vs.autosave = e.target.checked; App.refresh(); } });
     box.appendChild(h('label', { class: 'check', style: { alignItems: 'flex-start' }, for: 'opt-autosave' }, check,
-      h('span', null, h('strong', null, t(direct ? 'import.autosave' : 'import.autosaveCopy')),
-        h('div', { class: 'small muted' }, !writable ? t('import.autosaveNo') : direct ? t('import.autosaveSub') : t(App.embedded ? 'import.autosaveSubFrame' : 'import.autosaveSubCopy')))));
+      h('span', null, h('strong', null, t(vs.fromLink ? 'import.autosaveSame' : direct ? 'import.autosave' : 'import.autosaveCopy')),
+        h('div', { class: 'small muted' }, !writable ? t('import.autosaveNo') : vs.fromLink ? t('import.autosaveSameSub', { name: vs.file.name })
+          : direct ? t('import.autosaveSub', { copy: FileLink.copyName(vs.file.name) }) : t(App.embedded ? 'import.autosaveSubFrame' : 'import.autosaveSubCopy', { copy: FileLink.copyName(vs.file.name) })))));
     if (writable && vs.risks && vs.risks.length) {
       box.appendChild(h('div', { class: 'callout warn small', id: 'autosave-risk' }, icon('triangle-alert'), h('span', null, t('import.autosaveRisk', { what: vs.risks.map(function (r) { return t('import.risk.' + r); }).join(', ') }))));
     }
@@ -229,7 +231,9 @@
     if (vs.linked && l) {
       if (l.kind === 'file') {
         return h('div', { class: 'callout good', id: 'autosave-done' }, icon('file-check'),
-          h('div', null, h('strong', null, t('import.linkedTitle', { name: l.name })), h('div', { class: 'small' }, t('import.linkedFile'))));
+          h('div', null, h('strong', null, t('import.linkedTitle', { name: l.name })),
+            l.original ? h('div', { class: 'small', id: 'autosave-original' }, t('import.originalKept', { name: l.original })) : null,
+            h('div', { class: 'small' }, t('import.linkedFile'))));
       }
       return h('div', { class: 'callout', id: 'autosave-done' }, icon('file-spreadsheet'),
         h('div', { style: { flex: 1 } }, h('strong', null, t('import.linkedCopyTitle', { name: l.name })), h('div', { class: 'small' }, t('import.linkedCopy'))),

@@ -31,6 +31,10 @@
     vs.file = { name: file.name, size: file.size || (preloaded ? preloaded.length : 0) };
     // a file picked with write access can be kept up to date by the app (see FileLink)
     vs.handle = handle || file.handle || null;
+    // the app's own working copy, opened again from its notice: saving goes on into it
+    vs.fromLink = !!file.fromLink;
+    // the bundled sample is no file on disk: the app keeps its copy
+    vs.sample = !!file.sample;
     vs.lastModified = file.lastModified != null ? file.lastModified : null;
     vs.linked = false;
     vs.error = null;
@@ -237,8 +241,23 @@
     var FileLink = window.FileLink;
     var link = vs.autosave && FileLink.writableName(vs.file.name);
     function go() {
-      // the browser asks "let the app edit this file?" now, while the click still counts
-      var allowed = link && vs.handle && vs.handle.requestPermission ? Promise.resolve(vs.handle.requestPermission({ mode: 'readwrite' })).catch(function () { return 'denied'; }) : Promise.resolve(null);
+      // the file given to the app is never written to: while the click still counts, the user chooses the new
+      // file the app keeps saving into (its own working copy, opened again, goes on as it is)
+      if (link && FileLink.canWrite() && !vs.fromLink && !vs.sample && !vs.copyTo && !vs.noCopyFile) {
+        FileLink.chooseCopy(vs.file.name, vs.handle).then(function (h) { vs.copyTo = h; go(); }, function (e) {
+          if (e && e.code === 'same') { UI.toast(t('import.copySame'), { type: 'bad', timeout: 7000 }); return; }
+          // no new file chosen: the import goes on, the app keeps the up-to-date copy to download
+          if (!(e && e.name === 'AbortError')) console.error(e);
+          UI.toast(t('import.copyCancelled'), { type: 'info', timeout: 7000 });
+          vs.noCopyFile = true;
+          go();
+        });
+        return;
+      }
+      vs.noCopyFile = false;
+      var allowed = link && vs.fromLink && vs.handle && vs.handle.requestPermission ? Promise.resolve(vs.handle.requestPermission({ mode: 'readwrite' })).catch(function () { return 'denied'; }) : Promise.resolve(null);
+      var copyTo = vs.copyTo || null;
+      vs.copyTo = null;
       vs.step = 'importing';
       App.refresh();
       FileLink.hold();
@@ -258,7 +277,7 @@
           var bytes = vs.bytes;
           return allowed.then(function () {
             return FileLink.linkImport({
-              name: vs.file.name, handle: FileLink.canWrite() ? vs.handle : null, lastModified: vs.lastModified, size: bytes.byteLength,
+              name: vs.file.name, handle: FileLink.canWrite() && vs.fromLink ? vs.handle : null, copyTo: copyTo, keepName: vs.fromLink, lastModified: vs.lastModified, size: bytes.byteLength,
               bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), analysis: a,
               placed: r.result.placed, cancelsPlaced: r.result.cancelsPlaced, importId: r.entry.id, hints: hints
             });

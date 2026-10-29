@@ -293,6 +293,13 @@
    * o: { name, bytes, handle (null: keep a copy), lastModified, size, analysis, placed, cancelsPlaced }
    */
   FileLink.linkImport = function (o) {
+    // the file that was imported is never written to: a copy of it goes into the file the user chose
+    if (o.copyTo) {
+      var target = o.copyTo;
+      return fill(target, o.bytes).then(function (f) {
+        return FileLink.linkImport(Object.assign({}, o, { copyTo: null, original: o.name, name: target.name, handle: target, lastModified: f.lastModified, size: f.size }));
+      });
+    }
     var prev = FileLink.link;
     var link = root.ExcelSync.createLink({
       sheets: o.analysis.sheets.filter(function (s) { return s.include && s.month.key; }).map(function (s) { return { name: s.name, month: s.month.key, layout: root.Importer.layoutOf(s) }; }),
@@ -383,8 +390,11 @@
   }
 
   function setLink(link, o, missing) {
-    link.name = o.name;
     link.kind = o.handle ? 'file' : 'copy';
+    // a copy kept in the browser downloads under its own name, so it never replaces the original
+    link.name = link.kind === 'copy' && !o.keepName ? FileLink.copyName(o.name) : o.name;
+    var prev = FileLink.link;
+    link.original = o.original || (prev && prev.original && sameFile(prev, link.name) ? prev.original : null) || (link.kind === 'copy' ? o.name : null);
     link.linkedAt = Date.now();
     link.lastSyncAt = null;
     link.lastModified = o.lastModified != null ? o.lastModified : null;
@@ -466,7 +476,7 @@
       if (!ok) { setStatus('permission'); return false; }
       return handle.getFile().then(function (f) {
         return f.arrayBuffer().then(function (bytes) {
-          return relinkFrom(bytes, { name: FileLink.link.name, handle: handle, bytes: bytes, lastModified: f.lastModified, size: f.size });
+          return relinkFrom(bytes, { name: FileLink.link.name, original: FileLink.link.original, handle: handle, bytes: bytes, lastModified: f.lastModified, size: f.size });
         });
       });
     });
@@ -479,9 +489,48 @@
       if (!ok) throw new Error('permission');
       return handle.getFile();
     }).then(function (f) {
-      return f.arrayBuffer().then(function (b) { return { name: f.name, data: new Uint8Array(b), handle: handle, lastModified: f.lastModified, size: f.size }; });
+      return f.arrayBuffer().then(function (b) { return { name: f.name, data: new Uint8Array(b), handle: handle, lastModified: f.lastModified, size: f.size, fromLink: true }; });
     });
   };
+
+  /** The name offered for the working copy: "Üretim 2026.xlsx" -> "Üretim 2026 - guncel.xlsx" (plain letters: every browser keeps it). */
+  FileLink.copyName = function (name) {
+    var base = String(name || 'sigorta-portfoy').replace(/\.[a-z0-9]+$/i, '');
+    return /- guncel$/i.test(base) ? base + '.xlsx' : base + ' - guncel.xlsx';
+  };
+
+  /** Writes bytes into a file (a fresh working copy); resolves to the File as it now is. */
+  function fill(h, bytes) {
+    return h.createWritable().then(function (w) { return w.write(bytes).then(function () { return w.close(); }); }).then(function () { return h.getFile(); });
+  }
+
+  /**
+   * Asks where to keep the working copy of a file (from a click). The file itself is never written to: choosing it
+   * again as the copy is refused (code 'same').
+   */
+  FileLink.chooseCopy = function (name, original) {
+    return root.showSaveFilePicker({ id: 'sigorta-portfoy-excel', suggestedName: FileLink.copyName(name), types: XLSX_TYPES }).then(function (h) {
+      if (!original || !original.isSameEntry) return h;
+      return original.isSameEntry(h).then(function (same) {
+        if (same) throw Object.assign(new Error('same'), { code: 'same' });
+        return h;
+      });
+    });
+  };
+
+  /** Goes on from another workbook without touching it: a copy of it, linked to the app's data. */
+  function linkCopyOf(p) {
+    if (!FileLink.writableName(p.file.name)) return Promise.reject(Object.assign(new Error('type'), { code: 'type' }));
+    var copy;
+    return FileLink.chooseCopy(p.file.name, p.handle).then(function (h) {
+      copy = h;
+      return p.file.arrayBuffer();
+    }).then(function (bytes) {
+      return fill(copy, bytes).then(function (f) {
+        return relinkFrom(bytes, { name: copy.name, original: p.file.name, handle: copy, bytes: bytes, lastModified: f.lastModified, size: f.size });
+      });
+    });
+  }
 
   var XLSX_TYPES = [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }];
 
@@ -508,11 +557,7 @@
       picked = p;
       if (!sameFile(link, p.file.name)) {
         return Promise.resolve(onOther ? onOther(p.file.name) : false).then(function (ok) {
-          if (!ok) return false;
-          if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
-          return p.file.arrayBuffer().then(function (bytes) {
-            return relinkFrom(bytes, { name: p.file.name, handle: p.handle, bytes: bytes, lastModified: p.file.lastModified, size: p.file.size });
-          });
+          return ok ? linkCopyOf(p) : false;
         });
       }
       handle = p.handle;
@@ -525,15 +570,7 @@
 
   /** Links another workbook to the app's data (no import). */
   FileLink.linkExisting = function () {
-    var picked;
-    return FileLink.pick().then(function (p) {
-      picked = p;
-      if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
-      return p.file.arrayBuffer();
-    }).then(function (bytes) {
-      // write access is asked for by the first save (or by the notice, if the browser wants one more click)
-      return relinkFrom(bytes, { name: picked.file.name, handle: picked.handle, bytes: bytes, lastModified: picked.file.lastModified, size: picked.file.size });
-    });
+    return FileLink.pick().then(linkCopyOf);
   };
 
   /** A new .xlsx with every month of the app on its own page (the agency's yellow headers and İptal block). */

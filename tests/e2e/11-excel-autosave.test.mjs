@@ -7,7 +7,9 @@ import { setup, go, text, store, confirmDialog, download, readBook, sheetRows, R
 
 const require = createRequire(import.meta.url);
 const ExcelJS = require('../../vendor/exceljs.min.js');
-const FILE = 'portfoy-2026.xlsx';
+// the file given to the app (never written to) and the new file the app keeps saving into
+const ORIG = 'portfoy-2026.xlsx';
+const FILE = 'portfoy-2026-guncel.xlsx';
 const SAMPLE = fs.readFileSync(path.join(ROOT, 'sample-data', 'ornek-portfoy.xlsx'));
 
 let env;
@@ -86,22 +88,33 @@ const rowsIn = (buf, sheet) => {
 };
 const policyNo = (page, no) => store(page, (n) => { const p = Array.from(Store.policies.values()).find(x => x.policyNo === n); return p ? Object.assign({}, p) : null; }, no);
 
-test('importing with "save to this file" links the workbook; nothing is written until something changes', async () => {
+test('importing saves a copy to a new file the user chooses; the file given to the app is never written to', async () => {
   const { page, base } = env;
   await page.goto(base);
-  await putFile(page, FILE, SAMPLE);
-  await offer(page, FILE);
+  await putFile(page, ORIG, SAMPLE);
+  await offer(page, ORIG);
   await go(page, 'ice-aktar');
   await page.click('#import-drop');
   await page.waitForSelector('#sheet-table');
   assert.equal(await page.$eval('#opt-autosave', e => e.checked), true, 'on by default for an .xlsx');
-  assert.match(await text(page, '#autosave-box'), /Bu Excel dosyasına otomatik kaydet/);
+  assert.match(await text(page, '#autosave-box'), /Değişiklikleri yeni bir Excel dosyasına otomatik kaydet/);
+  assert.match(await text(page, '#autosave-box'), /portfoy-2026 - guncel\.xlsx/, 'the new name is suggested');
+  // the save dialog: first the user picks the original itself (refused), then a new file
+  await page.evaluate(async (n) => { const fh = await (await navigator.storage.getDirectory()).getFileHandle(n); window.showSaveFilePicker = async (o) => { window.__suggested = o.suggestedName; return fh; }; }, ORIG);
+  await page.click('#import-run');
+  await page.waitForSelector('.toast:has-text("Verdiğiniz dosyanın üzerine kaydedilmez")');
+  assert.ok(await page.$('#sheet-table'), 'still on the preview, nothing imported');
+  assert.equal(await page.evaluate(() => window.__suggested), 'portfoy-2026 - guncel.xlsx');
+  await page.evaluate(async (n) => { window.showSaveFilePicker = async () => (await navigator.storage.getDirectory()).getFileHandle(n, { create: true }); }, FILE);
   await page.click('#import-run');
   await page.waitForSelector('#autosave-done');
   assert.match(await text(page, '#autosave-done'), new RegExp('Otomatik kayıt açık: ' + FILE));
+  assert.match(await text(page, '#autosave-original'), new RegExp('Verdiğiniz dosya \\(' + ORIG.replace('.', '\\.') + '\\) olduğu gibi kaldı'));
   await page.waitForFunction(() => window.FileLink.status === 'saved');
-  assert.deepEqual(await store(page, () => ({ kind: FileLink.link.kind, writes: FileLink.link.writes, sheets: Object.keys(FileLink.link.sheets).length })), { kind: 'file', writes: 0, sheets: 13 });
-  assert.ok((await getFile(page, FILE)).equals(SAMPLE), 'the file is not touched');
+  assert.deepEqual(await store(page, () => ({ kind: FileLink.link.kind, name: FileLink.link.name, original: FileLink.link.original, writes: FileLink.link.writes, sheets: Object.keys(FileLink.link.sheets).length })),
+    { kind: 'file', name: FILE, original: ORIG, writes: 0, sheets: 13 });
+  assert.ok((await getFile(page, FILE)).equals(SAMPLE), 'the new file starts as an exact copy');
+  assert.ok((await getFile(page, ORIG)).equals(SAMPLE), 'the original is not touched');
   assert.match(await text(page, '#excel-status'), /Excel dosyasına kaydediliyor/);
   assert.deepEqual(env.errors, []);
 });
@@ -407,6 +420,8 @@ test('settings: the Excel card shows the file, earlier versions and unlinks it',
   assert.match(v.name, /\.xlsx$/);
   assert.ok(readBook(v.bytes).SheetNames.includes('Ekim 2026'), 'a workbook the app kept before writing');
   await page.keyboard.press('Escape');
+  assert.ok((await getFile(page, ORIG)).equals(SAMPLE), 'after every save so far, the file given to the app is exactly as it was');
+  assert.match(await text(page, '#settings-excel'), new RegExp('Asıl dosya ' + ORIG.replace('.', '\\.') + ' değiştirilmez'));
   await page.click('#xl-unlink');
   await confirmDialog(page);
   await page.waitForSelector('#settings-excel #xl-none');
@@ -439,7 +454,7 @@ test('a browser that cannot write to files keeps an up-to-date copy to download'
     await page.click('#save-policy');
     await page.waitForSelector('.toast:has-text("Kaydedildi: Kopya Deneme")');
     const file = await download(page, () => page.click('#excel-download-foot'));
-    assert.equal(file.name, 'ornek-portfoy.xlsx');
+    assert.equal(file.name, 'ornek-portfoy - guncel.xlsx', 'a new name: the original download is not replaced');
     const rows = rowsIn(file.bytes, 'Ekim 2026');
     assert.ok(rows.some(r => r.includes('COPY-1')), 'the new record is on its month page');
     assert.deepEqual(rowsIn(file.bytes, 'MART'), rowsIn(SAMPLE, 'MART'), 'the other pages are as they were');

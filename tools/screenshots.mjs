@@ -230,7 +230,8 @@ async function phone() {
 }
 
 // ------------------------------------------------------------------ the linked Excel file
-const FILE = 'Uretim-2026.xlsx';
+const ORIG = 'Uretim-2026.xlsx';             // the file given to the app: never written to
+const FILE = 'Uretim-2026 - guncel.xlsx';    // the new file the app keeps saving into
 
 async function putFile(page, name, bytes) {
   await page.evaluate(async ([n, b64]) => {
@@ -313,7 +314,8 @@ async function excel() {
     // this Chromium build crashes reading a file handle back from IndexedDB: keep none (see FileLink)
     await env.context.addInitScript(() => localStorage.setItem('sp:handle-off', (/Chrom(?:e|ium)\/(\d+)/.exec(navigator.userAgent) || [])[1] || 'other'));
     await page.goto(base);
-    await putFile(page, FILE, fs.readFileSync(path.join(ROOT, 'sample-data', 'ornek-portfoy.xlsx')));
+    await putFile(page, ORIG, fs.readFileSync(path.join(ROOT, 'sample-data', 'ornek-portfoy.xlsx')));
+    await page.evaluate(async (n) => { window.showSaveFilePicker = async () => (await navigator.storage.getDirectory()).getFileHandle(n, { create: true }); }, FILE);
     await go(page, 'ice-aktar');
     await page.click('#import-drop');
     await page.waitForSelector('#sheet-table');
@@ -382,7 +384,7 @@ async function excel() {
     }, x.id);
     const shotPage = await env.context.newPage();
     await sheetPicture(shotPage, bytes, 'Ekim 2026', {
-      file: '35-excel-file-new-row', caption: 'Uretim-2026.xlsx · Ekim 2026, after "Kaydet": the new record under the last row (78), the cancellation in the next empty row of the İptal block',
+      file: '35-excel-file-new-row', caption: FILE + ' · Ekim 2026, after "Kaydet": the new record under the last row (78), the cancellation in the next empty row of the İptal block',
       cols: [1, 2, 5, 6, 10, 11, 12, 15, 0, info.block, info.block + 1, info.block + 2, info.block + 3, info.block + 4, info.block + 5],
       rows: [1, info.header, info.header + 1, info.header + 2, info.header + 3, 0, info.row - 2, info.row - 1, info.row, info.row + 1], mark: [info.row],
       markCells: { [info.xrow]: [info.block, info.block + 1, info.block + 2, info.block + 3, info.block + 4, info.block + 5] }

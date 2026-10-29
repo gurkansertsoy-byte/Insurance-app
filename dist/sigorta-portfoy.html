@@ -5540,6 +5540,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
    * o: { name, bytes, handle (null: keep a copy), lastModified, size, analysis, placed, cancelsPlaced }
    */
   FileLink.linkImport = function (o) {
+    // the file that was imported is never written to: a copy of it goes into the file the user chose
+    if (o.copyTo) {
+      var target = o.copyTo;
+      return fill(target, o.bytes).then(function (f) {
+        return FileLink.linkImport(Object.assign({}, o, { copyTo: null, original: o.name, name: target.name, handle: target, lastModified: f.lastModified, size: f.size }));
+      });
+    }
     var prev = FileLink.link;
     var link = root.ExcelSync.createLink({
       sheets: o.analysis.sheets.filter(function (s) { return s.include && s.month.key; }).map(function (s) { return { name: s.name, month: s.month.key, layout: root.Importer.layoutOf(s) }; }),
@@ -5630,8 +5637,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   }
 
   function setLink(link, o, missing) {
-    link.name = o.name;
     link.kind = o.handle ? 'file' : 'copy';
+    // a copy kept in the browser downloads under its own name, so it never replaces the original
+    link.name = link.kind === 'copy' && !o.keepName ? FileLink.copyName(o.name) : o.name;
+    var prev = FileLink.link;
+    link.original = o.original || (prev && prev.original && sameFile(prev, link.name) ? prev.original : null) || (link.kind === 'copy' ? o.name : null);
     link.linkedAt = Date.now();
     link.lastSyncAt = null;
     link.lastModified = o.lastModified != null ? o.lastModified : null;
@@ -5713,7 +5723,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (!ok) { setStatus('permission'); return false; }
       return handle.getFile().then(function (f) {
         return f.arrayBuffer().then(function (bytes) {
-          return relinkFrom(bytes, { name: FileLink.link.name, handle: handle, bytes: bytes, lastModified: f.lastModified, size: f.size });
+          return relinkFrom(bytes, { name: FileLink.link.name, original: FileLink.link.original, handle: handle, bytes: bytes, lastModified: f.lastModified, size: f.size });
         });
       });
     });
@@ -5726,9 +5736,48 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (!ok) throw new Error('permission');
       return handle.getFile();
     }).then(function (f) {
-      return f.arrayBuffer().then(function (b) { return { name: f.name, data: new Uint8Array(b), handle: handle, lastModified: f.lastModified, size: f.size }; });
+      return f.arrayBuffer().then(function (b) { return { name: f.name, data: new Uint8Array(b), handle: handle, lastModified: f.lastModified, size: f.size, fromLink: true }; });
     });
   };
+
+  /** The name offered for the working copy: "Üretim 2026.xlsx" -> "Üretim 2026 - guncel.xlsx" (plain letters: every browser keeps it). */
+  FileLink.copyName = function (name) {
+    var base = String(name || 'sigorta-portfoy').replace(/\.[a-z0-9]+$/i, '');
+    return /- guncel$/i.test(base) ? base + '.xlsx' : base + ' - guncel.xlsx';
+  };
+
+  /** Writes bytes into a file (a fresh working copy); resolves to the File as it now is. */
+  function fill(h, bytes) {
+    return h.createWritable().then(function (w) { return w.write(bytes).then(function () { return w.close(); }); }).then(function () { return h.getFile(); });
+  }
+
+  /**
+   * Asks where to keep the working copy of a file (from a click). The file itself is never written to: choosing it
+   * again as the copy is refused (code 'same').
+   */
+  FileLink.chooseCopy = function (name, original) {
+    return root.showSaveFilePicker({ id: 'sigorta-portfoy-excel', suggestedName: FileLink.copyName(name), types: XLSX_TYPES }).then(function (h) {
+      if (!original || !original.isSameEntry) return h;
+      return original.isSameEntry(h).then(function (same) {
+        if (same) throw Object.assign(new Error('same'), { code: 'same' });
+        return h;
+      });
+    });
+  };
+
+  /** Goes on from another workbook without touching it: a copy of it, linked to the app's data. */
+  function linkCopyOf(p) {
+    if (!FileLink.writableName(p.file.name)) return Promise.reject(Object.assign(new Error('type'), { code: 'type' }));
+    var copy;
+    return FileLink.chooseCopy(p.file.name, p.handle).then(function (h) {
+      copy = h;
+      return p.file.arrayBuffer();
+    }).then(function (bytes) {
+      return fill(copy, bytes).then(function (f) {
+        return relinkFrom(bytes, { name: copy.name, original: p.file.name, handle: copy, bytes: bytes, lastModified: f.lastModified, size: f.size });
+      });
+    });
+  }
 
   var XLSX_TYPES = [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }];
 
@@ -5755,11 +5804,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       picked = p;
       if (!sameFile(link, p.file.name)) {
         return Promise.resolve(onOther ? onOther(p.file.name) : false).then(function (ok) {
-          if (!ok) return false;
-          if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
-          return p.file.arrayBuffer().then(function (bytes) {
-            return relinkFrom(bytes, { name: p.file.name, handle: p.handle, bytes: bytes, lastModified: p.file.lastModified, size: p.file.size });
-          });
+          return ok ? linkCopyOf(p) : false;
         });
       }
       handle = p.handle;
@@ -5772,15 +5817,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
   /** Links another workbook to the app's data (no import). */
   FileLink.linkExisting = function () {
-    var picked;
-    return FileLink.pick().then(function (p) {
-      picked = p;
-      if (!FileLink.writableName(p.file.name)) throw Object.assign(new Error('type'), { code: 'type' });
-      return p.file.arrayBuffer();
-    }).then(function (bytes) {
-      // write access is asked for by the first save (or by the notice, if the browser wants one more click)
-      return relinkFrom(bytes, { name: picked.file.name, handle: picked.handle, bytes: bytes, lastModified: picked.file.lastModified, size: picked.file.size });
-    });
+    return FileLink.pick().then(linkCopyOf);
   };
 
   /** A new .xlsx with every month of the app on its own page (the agency's yellow headers and İptal block). */
@@ -6232,7 +6269,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'xl.noVersions': 'Henüz saklanmış bir sürüm yok.', 'xl.v.linked': 'Bağlandığı anki hâli', 'xl.v.save': 'Kayıttan önceki hâli',
     'xl.card.title': 'Excel dosyası', 'xl.card.sub': 'Değişiklikler bağlı dosyanın ilgili ay sayfasına kendiliğinden yazılır',
     'xl.card.none': 'Bağlı bir Excel dosyası yok. Bir dosyayı içe aktarırken “Bu Excel dosyasına otomatik kaydet” seçeneğini işaretleyin; ya da mevcut bir dosyayı bağlayın veya uygulamadaki verilerle yeni bir dosya oluşturun.',
-    'xl.card.link': 'Mevcut dosyayı bağla', 'xl.card.createNew': 'Yeni Excel dosyası oluştur', 'xl.card.other': 'Başka dosya bağla', 'xl.card.saveNow': 'Şimdi kaydet',
+    'xl.card.link': 'Mevcut bir dosyadan devam et', 'xl.card.createNew': 'Yeni Excel dosyası oluştur', 'xl.card.other': 'Başka bir dosyadan devam et', 'xl.card.saveNow': 'Şimdi kaydet',
     'xl.card.mode.file': 'Otomatik kayıt açık: her değişiklik birkaç saniye içinde dosyanın kendisine yazılır.',
     'xl.card.mode.copy': 'Bu tarayıcı dosyaya doğrudan yazamıyor. Değişiklikler dosyanın bir kopyasına işlenir; güncel dosyayı istediğiniz an indirin.',
     'xl.card.last': 'Son kayıt', 'xl.card.linkedAt': 'Bağlandı: {when}', 'xl.card.lastCopy': 'İndirdiğiniz dosya her zaman tüm değişiklikleri içerir',
@@ -6243,11 +6280,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'xl.pill.on': 'Otomatik kayıt açık', 'xl.pill.copy': 'Kopya', 'xl.savedNow': 'Excel dosyası kaydedildi', 'xl.created': '{name} oluşturuldu; değişiklikler artık bu dosyaya yazılıyor',
     'xl.err.type': 'Yalnızca .xlsx dosyalarına yazılabilir', 'xl.err.permission': 'Dosyaya yazma izni verilmedi', 'xl.err.generic': 'Excel dosyası: {msg}',
     'xl.err.link': 'Dosya içe aktarıldı ama otomatik kayıt başlatılamadı',
-    'import.autosave': 'Bu Excel dosyasına otomatik kaydet',
-    'import.autosaveSub': 'Yeni kayıt, düzenleme, iptal… Her değişiklik birkaç saniye içinde bu dosyanın ilgili ay sayfasına yazılır; sayfa düzeni, renkler ve formüller korunur. Tarayıcı bir kez dosyayı düzenleme izni ister.',
+    'import.autosave': 'Değişiklikleri yeni bir Excel dosyasına otomatik kaydet',
+    'import.autosaveSub': 'Seçtiğiniz dosya hiç değiştirilmez. Aktar’a bastığınızda yeni dosyanın yerini ve adını seçersiniz (önerilen: {copy}); dosyanın bir kopyası oraya yazılır ve bundan sonra her değişiklik (yeni kayıt, düzenleme, iptal) birkaç saniye içinde o dosyanın ilgili ay sayfasına kaydedilir. Sayfa düzeni, renkler ve formüller korunur.',
+    'import.autosaveSame': 'Bu dosyaya kaydetmeye devam et', 'import.autosaveSameSub': '{name} uygulamanın kaydettiği dosya; değişiklikler yine ona yazılır.',
+    'import.copyCancelled': 'Yeni dosya seçilmedi: değişiklikler uygulamadaki bir kopyaya işlenir; güncel dosyayı istediğiniz an indirebilirsiniz.', 'import.copySame': 'Verdiğiniz dosyanın üzerine kaydedilmez: yeni dosya için başka bir ad seçin.',
+    'import.originalKept': 'Verdiğiniz dosya ({name}) olduğu gibi kaldı.', 'xl.card.original': 'Asıl dosya {name} değiştirilmez.',
     'import.autosaveCopy': 'Bu Excel dosyasını güncel tut',
-    'import.autosaveSubCopy': 'Bu tarayıcı dosyaya doğrudan yazamıyor: değişiklikler dosyanın bir kopyasına işlenir, güncel dosyayı istediğiniz an indirirsiniz. Dosyaya doğrudan kayıt için Chrome veya Edge kullanın.',
-    'import.autosaveSubFrame': 'Uygulama bir çerçeve içinde açık: değişiklikler dosyanın bir kopyasına işlenir, güncel dosyayı istediğiniz an indirirsiniz.',
+    'import.autosaveSubCopy': 'Seçtiğiniz dosya değiştirilmez. Bu tarayıcı dosyalara doğrudan yazamadığı için değişiklikler bir kopyaya işlenir; güncel dosyayı ({copy}) istediğiniz an indirirsiniz. Kendiliğinden kaydetme için Chrome veya Edge kullanın.',
+    'import.autosaveSubFrame': 'Seçtiğiniz dosya değiştirilmez. Uygulama bir çerçeve içinde açık: değişiklikler bir kopyaya işlenir, güncel dosyayı ({copy}) istediğiniz an indirirsiniz.',
     'import.autosaveNo': 'Bu dosya türüne yazılamıyor (.xlsx gerekir). İçe aktardıktan sonra verilerinizle yeni bir .xlsx dosyası oluşturabilirsiniz.',
     'import.autosaveRisk': 'Dosyada {what} var; kaydederken bunlar korunamaz. Yine de bağlamak isterseniz önce dosyanın bir kopyasını alın.',
     'import.risk.charts': 'grafik', 'import.risk.pivots': 'özet tablo (pivot)', 'import.risk.macros': 'makro',
@@ -6638,7 +6678,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'xl.noVersions': 'No versions kept yet.', 'xl.v.linked': 'As it was when linked', 'xl.v.save': 'Before a save',
     'xl.card.title': 'Excel file', 'xl.card.sub': 'Changes are written to the linked file, on the page of their month',
     'xl.card.none': 'No Excel file is linked. Tick "Save to this Excel file automatically" when importing a file, link an existing file, or create a new one from the app\'s data.',
-    'xl.card.link': 'Link an existing file', 'xl.card.createNew': 'Create a new Excel file', 'xl.card.other': 'Link another file', 'xl.card.saveNow': 'Save now',
+    'xl.card.link': 'Go on from an existing file', 'xl.card.createNew': 'Create a new Excel file', 'xl.card.other': 'Go on from another file', 'xl.card.saveNow': 'Save now',
     'xl.card.mode.file': 'Automatic saving is on: every change is written to the file itself within a few seconds.',
     'xl.card.mode.copy': 'This browser cannot write to the file directly. Changes go into a copy of it; download the up-to-date file whenever you like.',
     'xl.card.last': 'Last saved', 'xl.card.linkedAt': 'Linked: {when}', 'xl.card.lastCopy': 'The file you download always has every change in it',
@@ -6649,11 +6689,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'xl.pill.on': 'Automatic saving on', 'xl.pill.copy': 'Copy', 'xl.savedNow': 'Excel file saved', 'xl.created': '{name} created; changes are now written to it',
     'xl.err.type': 'Only .xlsx files can be written to', 'xl.err.permission': 'Permission to write to the file was not given', 'xl.err.generic': 'Excel file: {msg}',
     'xl.err.link': 'The file was imported but automatic saving could not start',
-    'import.autosave': 'Save to this Excel file automatically',
-    'import.autosaveSub': 'New records, edits, cancellations… every change is written to this file\'s page for its month within a few seconds; the layout, colours and formulas are kept. The browser asks once for permission to edit the file.',
+    'import.autosave': 'Save changes to a new Excel file automatically',
+    'import.autosaveSub': 'The file you chose is never changed. When you press Import you choose where to keep a new file (suggested: {copy}); a copy goes there and from then on every change (new records, edits, cancellations) is saved into that file\'s page for its month within a few seconds. Layout, colours and formulas are kept.',
+    'import.autosaveSame': 'Keep saving to this file', 'import.autosaveSameSub': '{name} is the file the app saves to; changes keep going into it.',
+    'import.copyCancelled': 'No new file chosen: changes go into a copy kept in the app; download the up-to-date file whenever you like.', 'import.copySame': 'The file you gave is never saved over: choose another name for the new file.',
+    'import.originalKept': 'The file you gave ({name}) is left as it was.', 'xl.card.original': 'The original {name} is never changed.',
     'import.autosaveCopy': 'Keep this Excel file up to date',
-    'import.autosaveSubCopy': 'This browser cannot write to the file directly: changes go into a copy of it that you can download whenever you like. Use Chrome or Edge to save straight to the file.',
-    'import.autosaveSubFrame': 'The app is open inside a frame: changes go into a copy of the file that you can download whenever you like.',
+    'import.autosaveSubCopy': 'The file you chose is never changed. This browser cannot write to files, so changes go into a copy ({copy}) that you can download whenever you like. Use Chrome or Edge for saving by itself.',
+    'import.autosaveSubFrame': 'The file you chose is never changed. The app is open inside a frame: changes go into a copy ({copy}) that you can download whenever you like.',
     'import.autosaveNo': 'This kind of file cannot be written to (.xlsx needed). After importing you can create a new .xlsx with your data.',
     'import.autosaveRisk': 'The file has {what}; they cannot be kept when saving. If you link it anyway, keep a copy of the file first.',
     'import.risk.charts': 'charts', 'import.risk.pivots': 'pivot tables', 'import.risk.macros': 'macros',
@@ -7957,7 +8000,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
         var bin = atob(window.SAMPLE_XLSX_BASE64);
         var bytes = new Uint8Array(bin.length);
         for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        App.pendingFile = { name: 'ornek-portfoy.xlsx', data: bytes, size: bytes.length };
+        App.pendingFile = { name: 'ornek-portfoy.xlsx', data: bytes, size: bytes.length, sample: true };
         App.go('ice-aktar');
       } catch (e) { UI.toast(t('dash.demoFailed'), { type: 'bad' }); }
     }
@@ -10599,6 +10642,10 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     vs.file = { name: file.name, size: file.size || (preloaded ? preloaded.length : 0) };
     // a file picked with write access can be kept up to date by the app (see FileLink)
     vs.handle = handle || file.handle || null;
+    // the app's own working copy, opened again from its notice: saving goes on into it
+    vs.fromLink = !!file.fromLink;
+    // the bundled sample is no file on disk: the app keeps its copy
+    vs.sample = !!file.sample;
     vs.lastModified = file.lastModified != null ? file.lastModified : null;
     vs.linked = false;
     vs.error = null;
@@ -10805,8 +10852,23 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     var FileLink = window.FileLink;
     var link = vs.autosave && FileLink.writableName(vs.file.name);
     function go() {
-      // the browser asks "let the app edit this file?" now, while the click still counts
-      var allowed = link && vs.handle && vs.handle.requestPermission ? Promise.resolve(vs.handle.requestPermission({ mode: 'readwrite' })).catch(function () { return 'denied'; }) : Promise.resolve(null);
+      // the file given to the app is never written to: while the click still counts, the user chooses the new
+      // file the app keeps saving into (its own working copy, opened again, goes on as it is)
+      if (link && FileLink.canWrite() && !vs.fromLink && !vs.sample && !vs.copyTo && !vs.noCopyFile) {
+        FileLink.chooseCopy(vs.file.name, vs.handle).then(function (h) { vs.copyTo = h; go(); }, function (e) {
+          if (e && e.code === 'same') { UI.toast(t('import.copySame'), { type: 'bad', timeout: 7000 }); return; }
+          // no new file chosen: the import goes on, the app keeps the up-to-date copy to download
+          if (!(e && e.name === 'AbortError')) console.error(e);
+          UI.toast(t('import.copyCancelled'), { type: 'info', timeout: 7000 });
+          vs.noCopyFile = true;
+          go();
+        });
+        return;
+      }
+      vs.noCopyFile = false;
+      var allowed = link && vs.fromLink && vs.handle && vs.handle.requestPermission ? Promise.resolve(vs.handle.requestPermission({ mode: 'readwrite' })).catch(function () { return 'denied'; }) : Promise.resolve(null);
+      var copyTo = vs.copyTo || null;
+      vs.copyTo = null;
       vs.step = 'importing';
       App.refresh();
       FileLink.hold();
@@ -10826,7 +10888,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
           var bytes = vs.bytes;
           return allowed.then(function () {
             return FileLink.linkImport({
-              name: vs.file.name, handle: FileLink.canWrite() ? vs.handle : null, lastModified: vs.lastModified, size: bytes.byteLength,
+              name: vs.file.name, handle: FileLink.canWrite() && vs.fromLink ? vs.handle : null, copyTo: copyTo, keepName: vs.fromLink, lastModified: vs.lastModified, size: bytes.byteLength,
               bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), analysis: a,
               placed: r.result.placed, cancelsPlaced: r.result.cancelsPlaced, importId: r.entry.id, hints: hints
             });
@@ -11268,7 +11330,8 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
       var st = FileLink.status;
       var pill = l.kind === 'copy' ? UI.pill(t('xl.pill.copy'), 'plain')
         : st === 'saved' ? UI.pill(t('xl.pill.on'), 'good') : st === 'pending' || st === 'saving' ? UI.pill(t('xl.foot.' + st), 'warn') : UI.pill(t('xl.foot.' + st), 'bad');
-      body.appendChild(settingRow(h('span', { class: 'xl-file' }, icon('file-spreadsheet'), ' ', h('strong', { id: 'xl-name' }, l.name)), t(l.kind === 'copy' ? 'xl.card.mode.copy' : 'xl.card.mode.file'), pill, 'xl-file-row'));
+      body.appendChild(settingRow(h('span', { class: 'xl-file' }, icon('file-spreadsheet'), ' ', h('strong', { id: 'xl-name' }, l.name)),
+        t(l.kind === 'copy' ? 'xl.card.mode.copy' : 'xl.card.mode.file') + (l.original ? ' ' + t('xl.card.original', { name: l.original }) : ''), pill, 'xl-file-row'));
       body.appendChild(settingRow(t('xl.card.last'), l.kind === 'copy' ? t('xl.card.lastCopy') : t('xl.card.linkedAt', { when: when(l.linkedAt) }),
         h('span', { class: 'small', id: 'xl-last' }, l.kind === 'copy' ? (FileLink.dirty ? t('xl.card.copyDirty') : t('xl.card.copyClean')) : when(l.lastSyncAt))));
       if (FileLink.skipped) body.appendChild(h('div', { class: 'callout warn small' }, icon('triangle-alert'), h('span', null, t('xl.card.skipped', { n: FileLink.skipped }))));
@@ -11302,12 +11365,13 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
   /** The "save into this file" option of the import preview. */
   App.excelImportOption = function (vs) {
     var writable = FileLink.writableName(vs.file.name);
-    var direct = writable && !!vs.handle && FileLink.canWrite();
+    var direct = writable && FileLink.canWrite() && !vs.sample;
     var box = h('div', { class: 'stack', style: { gap: '8px' }, id: 'autosave-box' });
     var check = h('input', { type: 'checkbox', id: 'opt-autosave', checked: writable && !!vs.autosave, disabled: !writable, onChange: function (e) { vs.autosave = e.target.checked; App.refresh(); } });
     box.appendChild(h('label', { class: 'check', style: { alignItems: 'flex-start' }, for: 'opt-autosave' }, check,
-      h('span', null, h('strong', null, t(direct ? 'import.autosave' : 'import.autosaveCopy')),
-        h('div', { class: 'small muted' }, !writable ? t('import.autosaveNo') : direct ? t('import.autosaveSub') : t(App.embedded ? 'import.autosaveSubFrame' : 'import.autosaveSubCopy')))));
+      h('span', null, h('strong', null, t(vs.fromLink ? 'import.autosaveSame' : direct ? 'import.autosave' : 'import.autosaveCopy')),
+        h('div', { class: 'small muted' }, !writable ? t('import.autosaveNo') : vs.fromLink ? t('import.autosaveSameSub', { name: vs.file.name })
+          : direct ? t('import.autosaveSub', { copy: FileLink.copyName(vs.file.name) }) : t(App.embedded ? 'import.autosaveSubFrame' : 'import.autosaveSubCopy', { copy: FileLink.copyName(vs.file.name) })))));
     if (writable && vs.risks && vs.risks.length) {
       box.appendChild(h('div', { class: 'callout warn small', id: 'autosave-risk' }, icon('triangle-alert'), h('span', null, t('import.autosaveRisk', { what: vs.risks.map(function (r) { return t('import.risk.' + r); }).join(', ') }))));
     }
@@ -11327,7 +11391,9 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAIaOXV1Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     if (vs.linked && l) {
       if (l.kind === 'file') {
         return h('div', { class: 'callout good', id: 'autosave-done' }, icon('file-check'),
-          h('div', null, h('strong', null, t('import.linkedTitle', { name: l.name })), h('div', { class: 'small' }, t('import.linkedFile'))));
+          h('div', null, h('strong', null, t('import.linkedTitle', { name: l.name })),
+            l.original ? h('div', { class: 'small', id: 'autosave-original' }, t('import.originalKept', { name: l.original })) : null,
+            h('div', { class: 'small' }, t('import.linkedFile'))));
       }
       return h('div', { class: 'callout', id: 'autosave-done' }, icon('file-spreadsheet'),
         h('div', { style: { flex: 1 } }, h('strong', null, t('import.linkedCopyTitle', { name: l.name })), h('div', { class: 'small' }, t('import.linkedCopy'))),

@@ -3,17 +3,19 @@
 An HTML application for insurance agencies. It reads the agency's monthly production Excel file
 (one sheet per month), keeps every row in the browser, matches the same customer across months,
 and gives one screen per customer with everything they have bought in every month. **Every change
-made in the app is written back into that same Excel file, on the page of its month, a moment after
-it is saved — there is no save button.** The İptal block at the end of each page (ŞİRKET | POLİÇE |
+made in the app is saved into a new Excel file next to yours (a copy, "… - guncel.xlsx"), on the page
+of its month, a moment after it is saved — there is no save button. The file you give the app is never
+changed.** The İptal block at the end of each page (ŞİRKET | POLİÇE |
 SİGORTALI AD SOYAD | KART | CARİ | NAKİT) is read as cancellations of earlier policies. On top of
 that: an easy entry form, renewal tracking with WhatsApp reminders, on-account (cari) collections,
 tasks, reports and Excel exports in the agency's own column layout.
 
 *Türkçe özet:* Acentenin her ayı ayrı sayfada tutulan üretim Excel'ini okur, tüm satırları
 tarayıcıda saklar, aynı müşteriyi aylar arasında TC / ad + telefon / plaka ile eşleştirir ve
-müşterinin bütün aylardaki poliçelerini tek kartta gösterir. **Uygulamada yapılan her değişiklik
-(yeni kayıt, düzenleme, iptal) birkaç saniye içinde aynı Excel dosyasının ilgili ay sayfasına
-kendiliğinden yazılır; kaydet düğmesine basmak gerekmez.** Her sayfanın sonundaki ŞİRKET / POLİÇE /
+müşterinin bütün aylardaki poliçelerini tek kartta gösterir. **Verdiğiniz Excel dosyası hiç
+değiştirilmez: aktarırken seçtiğiniz yeni bir dosyaya ("… - guncel.xlsx") kopyası yazılır ve uygulamada
+yapılan her değişiklik (yeni kayıt, düzenleme, iptal) birkaç saniye içinde o dosyanın ilgili ay
+sayfasına kendiliğinden kaydedilir; kaydet düğmesine basmak gerekmez.** Her sayfanın sonundaki ŞİRKET / POLİÇE /
 SİGORTALI AD SOYAD / KART / CARİ / NAKİT bölümüne yazılan satırlar iptal olarak okunur ve önceki
 aylardaki eşleşen poliçe iptal edilir. Yeni kayıt formu, yenileme takibi, WhatsApp hatırlatma, cari
 tahsilat, görevler, raporlar ve aynı sütun düzeninde Excel çıktısı vardır. Veriler hiçbir sunucuya
@@ -32,8 +34,8 @@ On the first screen choose your Excel file, or press **Örnek veriyle dene** to 
 workbook (`sample-data/ornek-portfoy.xlsx`: 13 monthly sheets, 705 policies, 321 fictional customers,
 22 İptal rows). The interface is Turkish; an English version is one click away (EN button in the top bar).
 
-Saving straight into your Excel file needs **Chrome or Edge** on a computer (they let a web page write
-to a file you picked). In Firefox and Safari the app keeps an up-to-date copy of your workbook instead,
+Saving by itself into the new Excel file needs **Chrome or Edge** on a computer (they let a web page
+write to a file you chose). In Firefox and Safari the app keeps an up-to-date copy of your workbook instead,
 which you download with one click.
 
 ## What it does
@@ -86,14 +88,14 @@ Columns it recognises (any spelling or upper/lower case, with or without Turkish
 | Kart / Cari / Nakit | Kart, Kredi kartı, POS / Cari, Cari hesap, Veresiye / Nakit, Peşin, Elden |
 | Also | Başlangıç tarihi, Tanzim tarihi, E-posta, Doğum tarihi, Adres, Net prim, Temsilci |
 
-### 2. Every change goes into your Excel file, automatically
+### 2. Every change goes into a new Excel file, automatically (yours is never changed)
 
 | | |
 | --- | --- |
 | ![Save to this file](docs/screenshots/31-import-autosave.png) | ![Linked](docs/screenshots/32-import-linked.png) |
-| When you import an `.xlsx`, **Bu Excel dosyasına otomatik kaydet** is ticked. The browser asks once whether the app may edit the file. | From then on the app writes into that file by itself. |
+| When you import an `.xlsx`, **Değişiklikleri yeni bir Excel dosyasına otomatik kaydet** is ticked. Pressing *Aktar* opens a save dialog with "… - guncel.xlsx" suggested; choosing the original file itself is refused. | A copy of your file is written there, and from then on the app saves into that new file by itself. Your original stays exactly as it was. |
 | ![Saved](docs/screenshots/33-excel-saved.png) | ![In the file](docs/screenshots/35-excel-file-new-row.png) |
-| *Yeni kayıt* → *Kaydet*: a moment later the menu says **Excel'e kaydedildi**. | The same record in the workbook (open it again in Excel): on the Ekim 2026 page, right under the last row, with the page's own spelling (EVET, TC as a number, dates as dates). A cancellation made in the app went into the next empty row of that page's İptal block. |
+| *Yeni kayıt* → *Kaydet*: a moment later the menu says **Excel'e kaydedildi**. | The same record in the new workbook (open it in Excel): on the Ekim 2026 page, right under the last row, with the page's own spelling (EVET, TC as a number, dates as dates). A cancellation made in the app went into the next empty row of that page's İptal block. |
 
 How it writes, so the file stays yours:
 

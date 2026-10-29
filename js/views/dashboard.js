@@ -63,7 +63,7 @@
         var bin = atob(window.SAMPLE_XLSX_BASE64);
         var bytes = new Uint8Array(bin.length);
         for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        App.pendingFile = { name: 'ornek-portfoy.xlsx', data: bytes, size: bytes.length };
+        App.pendingFile = { name: 'ornek-portfoy.xlsx', data: bytes, size: bytes.length, sample: true };
         App.go('ice-aktar');
       } catch (e) { UI.toast(t('dash.demoFailed'), { type: 'bad' }); }
     }
