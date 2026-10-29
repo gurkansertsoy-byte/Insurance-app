@@ -101,8 +101,10 @@
     els.menuBtn = h('button', { type: 'button', class: 'icon-btn menu-btn', 'aria-controls': 'sidebar', 'aria-expanded': 'false', 'aria-label': t('nav.menu'), onClick: function () { setNav(!els.app.classList.contains('nav-open')); } }, icon('menu'));
     els.topbar = h('header', { class: 'topbar' }, els.menuBtn, h('div', { class: 'topbar-title' }, els.title, els.sub), els.search, els.newBtn, els.langBtn, els.themeBtn);
     els.content = h('main', { class: 'content', id: 'content', tabindex: '-1' });
+    // the linked Excel file's notices live outside the page, so a page being filled in is never redrawn for them
+    els.notice = h('div', { class: 'excel-notices', id: 'excel-notices' });
     els.scrim = h('div', { class: 'scrim', hidden: true, onClick: function () { setNav(false); } });
-    els.app = h('div', { class: 'app' }, els.sidebar, h('div', { class: 'main' }, els.topbar, els.content), els.scrim);
+    els.app = h('div', { class: 'app' }, els.sidebar, h('div', { class: 'main' }, els.topbar, els.notice, els.content), els.scrim);
     root.appendChild(els.app);
     updateShellTexts();
   }
@@ -131,6 +133,7 @@
     els.searchInput.setAttribute('aria-label', t('search.placeholder'));
     document.documentElement.lang = I18N.lang;
     renderNav();
+    if (App.drawExcelNotice) App.drawExcelNotice(els.notice);
   }
 
   function renderNav() {
@@ -157,6 +160,8 @@
 
   function renderNavFoot() {
     UI.clear(els.navFoot);
+    var excel = Store.loaded && App.excelFoot ? App.excelFoot() : null;
+    if (excel) els.navFoot.appendChild(excel);
     var status = Store.saveError ? 'err' : Store.saving ? 'busy' : '';
     var where = Store.backend === 'indexeddb' || Store.backend === 'localstorage' ? t('nav.storageLocal') : t('nav.storageMemory');
     els.navFoot.appendChild(h('div', { id: 'save-status' }, h('span', { class: 'save-dot ' + status }),
@@ -321,6 +326,9 @@
       applyTheme();
       updateShellTexts();
       App.render();
+      // the linked Excel file: catch up on changes the file does not have yet
+      window.FileLink.on(function () { renderNavFoot(); App.drawExcelNotice(els.notice); });
+      window.FileLink.init();
       if (navigator.storage && navigator.storage.persist) {
         navigator.storage.persisted().then(function (on) { if (!on) return navigator.storage.persist(); }).catch(function () { /* optional */ });
       }

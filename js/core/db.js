@@ -2,9 +2,11 @@
 (function (root) {
   'use strict';
   var DB_NAME = 'sigorta-portfoy';
-  var DB_VERSION = 2; // 2: cancellations (İptal rows)
+  var DB_VERSION = 3; // 2: cancellations (İptal rows); 3: files (the linked Excel file)
   var STORES = ['customers', 'policies', 'tasks', 'activities', 'cancellations', 'meta'];
-  var KEY = { meta: 'key' };
+  // kept apart from the data: a file handle and workbook bytes, stored as they are (no JSON copy)
+  var FILES = 'files';
+  var KEY = { meta: 'key', files: 'key' };
 
   function keyOf(store) { return KEY[store] || 'id'; }
 
@@ -35,6 +37,12 @@
     items.forEach(function (it) { os.put(it); });
     return txDone(tx);
   };
+  IDBBackend.prototype.get = function (store, key) {
+    return req(this.db.transaction(store, 'readonly').objectStore(store).get(key));
+  };
+  IDBBackend.prototype.keys = function (store) {
+    return req(this.db.transaction(store, 'readonly').objectStore(store).getAllKeys());
+  };
   IDBBackend.prototype.del = function (store, ids) {
     var tx = this.db.transaction(store, 'readwrite');
     var os = tx.objectStore(store);
@@ -54,7 +62,7 @@
       try { r = root.indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { reject(e); return; }
       r.onupgradeneeded = function () {
         var db = r.result;
-        STORES.forEach(function (s) {
+        STORES.concat([FILES]).forEach(function (s) {
           if (!db.objectStoreNames.contains(s)) {
             var os = db.createObjectStore(s, { keyPath: keyOf(s) });
             if (s === 'policies') { os.createIndex('customerId', 'customerId'); os.createIndex('month', 'month'); }
@@ -84,9 +92,10 @@
       }
       self.data[s] = m;
     });
+    this.data[FILES] = new Map(); // handles and bytes cannot go to localStorage: this session only
   }
   MapBackend.prototype.flush = function (store) {
-    if (!this.storage) return Promise.resolve();
+    if (!this.storage || store === FILES) return Promise.resolve();
     try {
       this.storage.setItem('sp:' + store, JSON.stringify(Array.from(this.data[store].values())));
       return Promise.resolve();
@@ -95,6 +104,13 @@
     }
   };
   MapBackend.prototype.getAll = function (store) { return Promise.resolve(Array.from(this.data[store].values())); };
+  MapBackend.prototype.get = function (store, key) { return Promise.resolve(this.data[store].get(key)); };
+  MapBackend.prototype.keys = function (store) { return Promise.resolve(Array.from(this.data[store].keys())); };
+  MapBackend.prototype.putRaw = function (store, items) {
+    var m = this.data[store], k = keyOf(store);
+    items.forEach(function (it) { m.set(it[k], it); });
+    return this.flush(store);
+  };
   MapBackend.prototype.put = function (store, items) {
     var m = this.data[store], k = keyOf(store);
     items.forEach(function (it) { m.set(it[k], JSON.parse(JSON.stringify(it))); });
@@ -155,6 +171,14 @@
       return enqueue(function () { return backend.del(store, ids); });
     },
     clear: function (store) { return enqueue(function () { return backend.clear(store); }); },
+    /** Stores items as they are: file handles and ArrayBuffers survive, nothing is JSON-copied. */
+    putRaw: function (store, items) {
+      items = Array.isArray(items) ? items : [items];
+      return enqueue(function () { return backend.putRaw ? backend.putRaw(store, items) : backend.put(store, items); });
+    },
+    get: function (store, key) { return enqueue(function () { return backend.get(store, key); }); },
+    keys: function (store) { return enqueue(function () { return backend.keys(store); }); },
+    FILES: FILES,
     idle: function () { return queue; }
   };
 

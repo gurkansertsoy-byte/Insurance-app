@@ -961,8 +961,16 @@
     return link;
   }
 
+  /** The first page of a workbook the app starts itself, for a month that has nothing yet. */
+  function startSheet(wb, month, meta) {
+    var layout = defaultLayout(meta);
+    var name = newSheetName(month, null, wb.worksheets.map(function (w) { return w.name; }));
+    createSheet(wb, { name: name, month: month, template: null }, { sheets: {} }, layout);
+    return { name: name, entry: { month: month, layout: freshLayout(layout), rows: {}, cancels: {} } };
+  }
+
   return {
-    createLink: createLink, buildPlan: buildPlan, apply: apply, policyValues: policyValues, cancelValues: cancelValues,
+    createLink: createLink, buildPlan: buildPlan, apply: apply, startSheet: startSheet, policyValues: policyValues, cancelValues: cancelValues,
     shiftFormula: shiftFormula, eachRef: eachRef, renameMonth: renameMonth, newSheetName: newSheetName, defaultLayout: defaultLayout,
     BLOCK_KINDS: BLOCK_KINDS, BLOCK_HEADERS: BLOCK_HEADERS
   };

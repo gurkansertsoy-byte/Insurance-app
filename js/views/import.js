@@ -24,11 +24,15 @@
     vs.analysis = a;
   }
 
-  function startFile(vs, file) {
+  function startFile(vs, file, handle) {
     vs.step = 'reading';
     // File objects have a bytes() method in current browsers, so the bundled sample uses `data`
     var preloaded = file.data instanceof Uint8Array ? file.data : null;
     vs.file = { name: file.name, size: file.size || (preloaded ? preloaded.length : 0) };
+    // a file picked with write access can be kept up to date by the app (see FileLink)
+    vs.handle = handle || file.handle || null;
+    vs.lastModified = file.lastModified != null ? file.lastModified : null;
+    vs.linked = false;
     vs.error = null;
     vs.overrides = {};
     vs.sheetOpts = {};
@@ -40,6 +44,9 @@
         try {
           vs.wb = Importer.readWorkbook(bytes, window.XLSX, file.name);
           analyze(vs);
+          vs.bytes = bytes;
+          vs.risks = window.FileLink.writableName(file.name) ? App.excelRisks(bytes) : [];
+          vs.autosave = window.FileLink.writableName(file.name) && !vs.risks.length;
           vs.step = 'preview';
         } catch (e) {
           console.error(e);
@@ -66,11 +73,29 @@
   }
 
   function fileZone(vs) {
+    var FileLink = window.FileLink;
     var input = h('input', { type: 'file', id: 'import-file', accept: '.xlsx,.xls,.xlsm,.ods,.csv', hidden: true, onChange: function () { if (input.files[0]) startFile(vs, input.files[0]); } });
     var zone = h('label', { class: 'dropzone', for: 'import-file', id: 'import-drop' }, icon('cloud-upload'), h('strong', null, t('import.drop')), h('span', { class: 'muted' }, t('import.dropSub')), h('span', { class: 'small muted' }, t('import.formats')));
+    // Chrome and Edge: the picker that can also let the app write to the file afterwards
+    zone.addEventListener('click', function (e) {
+      if (!FileLink.canWrite()) return;
+      e.preventDefault();
+      FileLink.pick().then(function (p) { startFile(vs, p.file, p.handle); }, function (err) {
+        if (err && err.name === 'AbortError') return;
+        console.warn(err);
+        input.click();
+      });
+    });
     ['dragenter', 'dragover'].forEach(function (ev) { zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add('over'); }); });
     ['dragleave', 'drop'].forEach(function (ev) { zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.remove('over'); }); });
-    zone.addEventListener('drop', function (e) { var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) startFile(vs, f); });
+    zone.addEventListener('drop', function (e) {
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      var item = e.dataTransfer.items && e.dataTransfer.items[0];
+      var getHandle = FileLink.canWrite() && item && item.getAsFileSystemHandle ? item.getAsFileSystemHandle() : null;
+      if (!getHandle) { startFile(vs, f); return; }
+      getHandle.then(function (hd) { startFile(vs, f, hd && hd.kind === 'file' ? hd : null); }, function () { startFile(vs, f); });
+    });
     return h('div', null, zone, input);
   }
 
@@ -87,6 +112,9 @@
           e.undone ? UI.pill(t('import.undone'), 'plain') : (e.added ? h('button', { type: 'button', class: 'btn btn-sm', onClick: function () {
             UI.confirm({ title: t('import.undoTitle'), message: t('import.undoMsg', { n: e.added, file: e.file }), danger: true, confirm: t('import.undo') }).then(function (ok) {
               if (!ok) return;
+              var FileLink = window.FileLink;
+              if (FileLink.link && FileLink.link.importId === e.id) FileLink.unlink();
+              else FileLink.expectDeletes(e.added + (e.cancelsAdded || 0));
               var r = Store.undoImport(e.id);
               UI.toast(t('import.undoDone', { p: r.policies, c: r.customers }));
             });
@@ -173,14 +201,15 @@
     var modeRadios = h('div', { class: 'stack', style: { gap: '8px' } },
       [['merge', 'import.modeMerge', 'import.modeMergeSub'], ['replace', 'import.modeReplace', 'import.modeReplaceSub']].map(function (o) {
         return h('label', { class: 'check', style: { alignItems: 'flex-start' } },
-          h('input', { type: 'radio', name: 'import-mode', id: 'mode-' + o[0], value: o[0], checked: vs.mode === o[0], onChange: function () { vs.mode = o[0]; } }),
+          h('input', { type: 'radio', name: 'import-mode', id: 'mode-' + o[0], value: o[0], checked: vs.mode === o[0], onChange: function () { vs.mode = o[0]; App.refresh(); } }),
           h('span', null, h('strong', null, t(o[1])), h('div', { class: 'small muted' }, t(o[2]))));
       }));
     var opts = h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', null, t('import.options'))),
       h('div', { class: 'card-body grid-2' }, modeRadios,
         h('div', { class: 'stack', style: { gap: '8px' } },
           h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'opt-tidy', checked: vs.tidyNames, onChange: function (e) { vs.tidyNames = e.target.checked; } }), t('import.tidyNames')),
-          h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'opt-remember', checked: vs.remember, onChange: function (e) { vs.remember = e.target.checked; } }), t('import.remember')))));
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'opt-remember', checked: vs.remember, onChange: function (e) { vs.remember = e.target.checked; } }), t('import.remember')))),
+      h('div', { class: 'card-body', style: { borderTop: '1px solid var(--border)', marginTop: '6px', paddingTop: '14px' } }, App.excelImportOption(vs)));
 
     var go = h('button', { type: 'button', class: 'btn btn-primary', id: 'import-run', disabled: !included.length, onClick: function () { run(vs); } }, icon('upload'), t('import.run', { n: F.num(rowsTotal) }));
     return h('div', { class: 'stack' },
@@ -205,9 +234,14 @@
       if (el) el.scrollIntoView({ block: 'center' });
       return;
     }
+    var FileLink = window.FileLink;
+    var link = vs.autosave && FileLink.writableName(vs.file.name);
     function go() {
+      // the browser asks "let the app edit this file?" now, while the click still counts
+      var allowed = link && vs.handle && vs.handle.requestPermission ? Promise.resolve(vs.handle.requestPermission({ mode: 'readwrite' })).catch(function () { return 'denied'; }) : Promise.resolve(null);
       vs.step = 'importing';
       App.refresh();
+      FileLink.hold();
       setTimeout(function () {
         var built = Importer.buildRecords(a, { tidyNames: vs.tidyNames, lang: lang() });
         var saveMap = {};
@@ -218,9 +252,22 @@
           vs.entry = r.entry;
           vs.skippedRows = built.skipped + U.sum(included, function (s) { return s.skipped.empty + s.skipped.totals + s.skipped.repeatedHeader; });
           vs.wb = null;
+          if (!link) return null;
+          var bytes = vs.bytes;
+          return allowed.then(function () {
+            return FileLink.linkImport({
+              name: vs.file.name, handle: FileLink.canWrite() ? vs.handle : null, lastModified: vs.lastModified, size: bytes.byteLength,
+              bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), analysis: a,
+              placed: r.result.placed, cancelsPlaced: r.result.cancelsPlaced, importId: r.entry.id
+            });
+          }).then(function () { vs.linked = true; }, function (e) { console.error(e); UI.toast(t('xl.err.link'), { type: 'bad' }); });
+        }).then(function () {
+          vs.bytes = null;
+          FileLink.release();
           App.refresh();
         }, function (e) {
           console.error(e);
+          FileLink.release();
           vs.step = 'preview';
           UI.toast(t('import.failed'), { type: 'bad' });
           App.refresh();
@@ -243,6 +290,7 @@
     var stat = function (id, k, v, sub) { return h('div', { id: id }, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v), sub ? h('div', { class: 'small muted' }, sub) : null); };
     return h('div', { class: 'stack' },
       h('div', { class: 'callout good', id: 'import-done' }, icon('circle-check'), h('div', null, h('strong', null, t('import.doneTitle')), h('div', { class: 'small' }, t('import.doneText', { file: e.file, n: e.sheets, months: e.months.length ? F.month(e.months[0]) + (e.months.length > 1 ? ' – ' + F.month(e.months[e.months.length - 1]) : '') : '' })))),
+      App.excelImportDone(vs),
       h('section', { class: 'card' }, h('div', { class: 'card-body stack' },
         h('div', { class: 'result-grid' + (r.cancels && r.cancels.rows ? ' three' : '') },
           stat('res-added', t('import.r.added'), F.num(r.added.length)),

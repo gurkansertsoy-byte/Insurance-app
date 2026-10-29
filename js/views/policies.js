@@ -284,6 +284,7 @@
             extra: h('label', { class: 'check', for: 'orphans' }, orphan, t('months.removeOrphans')), requireText: U.trUpper(F.month(r.key)) })
             .then(function (ok) {
               if (!ok) return;
+              window.FileLink.expectDeletes(list.length + xs.length);
               var res = Store.deleteMonth(r.key, orphan.checked);
               App.go('aylar');
               UI.toast(t('months.deleted', { n: res.policies, c: res.customers }));

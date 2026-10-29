@@ -18,7 +18,8 @@
       UI.confirm({ title: t('settings.restoreTitle'), message: t('settings.restoreMsg', { date: obj.exportedAt ? F.dateTime(Date.parse(obj.exportedAt)) : '?', c: F.num(obj.customers.length), p: F.num(obj.policies.length) }), danger: true, confirm: t('settings.restoreGo') })
         .then(function (ok) {
           if (!ok) return;
-          Store.restore(obj).then(function () { UI.toast(t('settings.restored')); App.go('panel'); }, function () { UI.toast(t('settings.restoreFailed'), { type: 'bad' }); });
+          // the backup's records are not the rows of the linked file: the link goes, the file stays as it is
+          window.FileLink.unlink().then(function () { return Store.restore(obj); }).then(function () { UI.toast(t('settings.restored')); App.go('panel'); }, function () { UI.toast(t('settings.restoreFailed'), { type: 'bad' }); });
         });
     });
   }
@@ -114,8 +115,9 @@
             UI.toast(t('settings.mappingsCleared'));
           } }, icon('rotate-ccw'), t('settings.mappingsBtn'))),
           setting(t('settings.clear'), t('settings.clearSub'), h('button', { type: 'button', class: 'btn btn-sm btn-danger', id: 'clear-btn', onClick: function () {
-            UI.confirm({ title: t('settings.clearTitle'), message: t('settings.clearMsg', { c: F.num(Store.customers.size), p: F.num(Store.policies.size) }), danger: true, confirm: t('settings.clearGo'), requireText: t('settings.clearWord') })
-              .then(function (ok) { if (!ok) return; Store.clearData().then(function () { UI.toast(t('settings.cleared')); App.go('panel'); }); });
+            UI.confirm({ title: t('settings.clearTitle'), message: t('settings.clearMsg', { c: F.num(Store.customers.size), p: F.num(Store.policies.size) }), danger: true, confirm: t('settings.clearGo'), requireText: t('settings.clearWord'),
+              extra: window.FileLink.link ? h('p', { class: 'small muted' }, t('settings.clearLinked', { name: window.FileLink.link.name })) : null })
+              .then(function (ok) { if (!ok) return; window.FileLink.unlink().then(function () { return Store.clearData(); }).then(function () { UI.toast(t('settings.cleared')); App.go('panel'); }); });
           } }, icon('trash-2'), t('settings.clearBtn')))));
 
       // storage
@@ -151,7 +153,7 @@
 
       var node = h('div', { class: 'settings-grid' },
         h('div', { class: 'stack' }, agency, appearance, template),
-        h('div', { class: 'stack' }, data, storage, about));
+        h('div', { class: 'stack' }, App.excelCard(), data, storage, about));
       if (App.viewState.settingsFocus) {
         var f = App.viewState.settingsFocus;
         App.viewState.settingsFocus = null;

@@ -423,6 +423,7 @@
         h('button', { type: 'button', class: 'btn btn-sm btn-danger', id: 'cust-delete', onClick: function () {
           UI.confirm({ title: t('customer.deleteTitle'), message: t('customer.deleteMsg', { name: c.name, n: list.length }), danger: true, confirm: t('common.delete') }).then(function (ok) {
             if (!ok) return;
+            window.FileLink.expectDeletes(list.length + list.filter(function (p) { return Store.isCancelled(p.id); }).length);
             var undo = Store.deleteCustomer(c.id);
             App.go('musteriler');
             UI.toast(t('customer.deleted'), { action: { label: t('common.undo'), fn: function () { undo(); App.go('musteri-' + c.id); } } });

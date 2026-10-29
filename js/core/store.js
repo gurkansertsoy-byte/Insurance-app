@@ -734,6 +734,8 @@
     // İptal rows, then find the policy each one cancels
     var cres = importCancels(opts.cancels || [], { importId: importId, fileName: opts.fileName || '', now: now });
     var relinked = relink();
+    // which row of the file became which İptal record (to write them back to the same rows)
+    res.cancelsPlaced = cres.rows.map(function (o) { return { sheet: o.rec.sheet, row: o.rec.row, id: o.x.id }; });
     res.cancels = { rows: cres.rows.length, added: cres.added.length, updated: cres.updated.length, unchanged: cres.unchanged, auto: 0, manual: 0, ambiguous: 0, none: 0 };
     cres.rows.forEach(function (o) {
       var x = o.x;
