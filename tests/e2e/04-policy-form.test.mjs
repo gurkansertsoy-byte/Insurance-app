@@ -19,7 +19,7 @@ test('saving an empty form explains what is missing', async () => {
   assert.equal(await hint(page, 'name'), 'Ad soyad gerekli');
   assert.equal(await hint(page, 'policyType'), 'Poliçe adı gerekli');
   assert.equal(await page.evaluate(() => document.activeElement.id), 'f-name', 'focus jumps to the first problem');
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies);
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows);
 });
 
 test('a new customer with every detail: live checks and helpers', async () => {

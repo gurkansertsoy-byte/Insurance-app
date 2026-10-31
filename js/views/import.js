@@ -1,7 +1,7 @@
 /* Excel import */
 (function () {
   'use strict';
-  var U = window.U, UI = window.UI, Store = window.Store, Schema = window.Schema, Importer = window.Importer, App = window.App;
+  var U = window.U, UI = window.UI, Store = window.Store, Schema = window.Schema, Importer = window.Importer, Portfolio = window.Portfolio, App = window.App;
   var h = UI.h, t = UI.t, icon = UI.icon, F = UI.F;
 
   function lang() { return window.I18N.lang; }
@@ -309,11 +309,19 @@
     var vsDone = vs.doneFilter || '';
     var issues = r.issues.filter(function (i) { return !vsDone || i.type === vsDone; });
     var stat = function (id, k, v, sub) { return h('div', { id: id }, h('div', { class: 'k' }, k), h('div', { class: 'v' }, v), sub ? h('div', { class: 'small muted' }, sub) : null); };
+    // policy numbers written again: rows that cancel an earlier policy, rows to ask about, EK / ZEYİL rows
+    var d = Store.derived();
+    var endorseN = 0;
+    d.repeats.forEach(function (info, id) { var q = Store.policies.get(id); if (q && Portfolio.repeatEffect(q, info) === 'endorse') endorseN++; });
+    var repeatsN = d.cancelOfRow.size;
+    var showRepeats = repeatsN || d.questions.length || endorseN;
+    var estN = d.policies.filter(function (p) { return Portfolio.commissionOf(p).estimated; }).length;
+    var nStats = 8 + (r.cancels && r.cancels.rows ? 1 : 0) + (showRepeats ? 1 : 0);
     return h('div', { class: 'stack' },
       h('div', { class: 'callout good', id: 'import-done' }, icon('circle-check'), h('div', null, h('strong', null, t('import.doneTitle')), h('div', { class: 'small' }, t('import.doneText', { file: e.file, n: e.sheets, months: e.months.length ? F.month(e.months[0]) + (e.months.length > 1 ? ' – ' + F.month(e.months[e.months.length - 1]) : '') : '' })))),
       App.excelImportDone(vs),
       h('section', { class: 'card' }, h('div', { class: 'card-body stack' },
-        h('div', { class: 'result-grid' + (r.cancels && r.cancels.rows ? ' three' : '') },
+        h('div', { class: 'result-grid' + (nStats === 9 ? ' three' : nStats === 10 ? ' five' : '') },
           stat('res-added', t('import.r.added'), F.num(r.added.length)),
           stat('res-updated', t('import.r.updated'), F.num(r.updated.length), t('import.r.updatedSub')),
           stat('res-unchanged', t('import.r.unchanged'), F.num(r.unchanged + r.duplicateRows), r.duplicateRows ? t('import.r.dupRows', { n: r.duplicateRows }) : t('import.r.unchangedSub')),
@@ -322,7 +330,12 @@
           stat('res-matched', t('import.r.matched'), F.num(matched.tc + matched['name+phone'] + matched['name+plate'] + matched.name + matched['name-ambiguous']), t('import.r.matchedSub', { tc: matched.tc, np: matched['name+phone'] + matched['name+plate'], n: matched.name + matched['name-ambiguous'] })),
           stat('res-updatedc', t('import.r.updatedCustomers'), F.num(r.customersUpdated.length)),
           r.cancels && r.cancels.rows ? stat('res-cancels', t('import.r.cancels'), F.num(r.cancels.rows), t('import.r.cancelsSub', { a: r.cancels.auto + r.cancels.manual, b: r.cancels.ambiguous, c: r.cancels.none })) : null,
+          showRepeats ? stat('res-repeats', t('import.r.repeats'), F.num(repeatsN), t('import.r.repeatsSub', { q: F.num(d.questions.length), e: F.num(endorseN) })) : null,
           stat('res-issues', t('import.r.issues'), F.num(r.issues.length))),
+        d.questions.length ? h('div', { class: 'callout warn', id: 'import-questions' }, icon('circle-help'),
+          h('div', { style: { flex: 1 } }, h('strong', null, t('repeat.dashTitle', { n: F.num(d.questions.length) })), h('div', { class: 'small' }, t('repeat.dashText'))),
+          h('a', { class: 'btn btn-sm', href: '#iptaller' }, t('repeat.answer'), icon('arrow-right'))) : null,
+        estN ? h('div', { class: 'callout', id: 'import-estimated' }, icon('calculator'), h('span', { class: 'small' }, t('import.r.estimated', { n: F.num(estN) }))) : null,
         h('div', { class: 'row' },
           h('a', { class: 'btn btn-primary', href: '#panel', id: 'go-dashboard' }, icon('layout-dashboard'), t('import.goDashboard')),
           h('a', { class: 'btn', href: '#musteriler' }, icon('users'), t('import.goCustomers')),

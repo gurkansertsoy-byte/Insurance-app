@@ -103,8 +103,8 @@
       custIds.forEach(function (id) { if (Store.summary(id).months.length > 1) multi++; });
       var due = 0, expired = 0;
       d.renewal.forEach(function (i) { if (i.state === 'due') due++; else if (i.state === 'expired' && i.daysLeft >= -60) expired++; });
-      var cancelCount = 0;
-      Store.cancellations.forEach(function (x) { if (monthsSet.has(x.month)) cancelCount++; });
+      // İptal block rows and rows that cancel an earlier policy by writing its number again
+      var cancelCount = Store.allCancels().filter(function (x) { return monthsSet.has(x.month); }).length;
       var outstanding = 0, openCount = 0;
       d.policies.forEach(function (p) { var o = Store.outstanding(p); if (o > 0) { outstanding += o; openCount++; } });
 
@@ -116,8 +116,9 @@
       var kpis = h('section', { class: 'card kpis', 'aria-label': t('dash.kpis') },
         kpi({ id: 'kpi-premium', icon: 'banknote', label: t('dash.kpiPremium'), value: F.moneyC(tot.premium), title: F.money(tot.premium),
           sub: t('dash.avgMonth', { v: F.moneyC(months.length ? tot.premium / months.length : 0) }), spark: Charts.sparkline(series.map(function (s) { return s.premium; })) }),
-        kpi({ id: 'kpi-commission', icon: 'badge-percent', label: t('dash.kpiCommission'), value: F.moneyC(tot.commission), title: F.money(tot.commission),
-          sub: t('dash.ofPremium', { p: F.pct(tot.premium ? tot.commission / tot.premium : null) }), spark: Charts.sparkline(series.map(function (s) { return s.commission; })) }),
+        kpi({ id: 'kpi-commission', icon: 'badge-percent', label: t('dash.kpiCommission'), value: F.moneyC(tot.commission),
+          sub: t('dash.ofPremium', { p: F.pct(tot.premium ? tot.commission / tot.premium : null) }) + (tot.estimated ? ' · ' + t('dash.estSub', { v: F.moneyC(tot.commissionEst) }) : ''),
+          title: F.money(tot.commission) + (tot.estimated ? ' · ' + t('comm.estTitle', { n: F.num(tot.estimated), v: F.money(tot.commissionEst) }) : ''), spark: Charts.sparkline(series.map(function (s) { return s.commission; })) }),
         kpi({ id: 'kpi-policies', icon: 'file-text', label: t('dash.kpiPolicies'), value: F.num(tot.count),
           sub: t('dash.newBiz', { n: F.num(tot.newCount), p: F.pct(tot.count ? tot.newCount / tot.count : null, 0) }) + (cancelCount ? ' · ' + t('dash.cancelSub', { n: F.num(cancelCount) }) : ''),
           spark: Charts.sparkline(series.map(function (s) { return s.count; })) }),
@@ -225,8 +226,10 @@
       ];
       var newRen = [
         { label: t('common.newBusiness'), value: tot.newCount, color: 'var(--chart-1)' },
-        { label: t('common.renewal'), value: tot.count - tot.newCount, color: 'var(--chart-2)' }
+        { label: t('common.renewal'), value: tot.renewalCount, color: 'var(--chart-2)' }
       ];
+      // ek, zeyil and rows whose YENİ İŞ cell is empty
+      if (tot.count - tot.newCount - tot.renewalCount > 0) newRen.push({ label: t('dash.otherKinds'), value: tot.count - tot.newCount - tot.renewalCount, color: 'var(--chart-muted)' });
       var payCard = h('section', { class: 'card', id: 'card-payments' },
         h('div', { class: 'card-head' }, h('h2', null, t('dash.payments'))),
         h('div', { class: 'card-body stack' },
@@ -268,8 +271,16 @@
               App.duePill(x.due));
           })) : UI.empty({ icon: 'list-checks', title: t('dash.noTasks'), text: t('dash.noTasksText') })));
 
-      return h('div', { class: 'stack' }, filters, kpis,
+      // what YENİ İŞ says each month: every row of the period, the rows that cancel included
+      var kinds = App.kindsCard({ id: 'chart-kinds', rows: d.rows.filter(function (p) { return monthsSet.has(p.month); }), months: months,
+        state: App.viewState.kinds || (App.viewState.kinds = {}), height: 300 });
+      var ask = d.questions.length ? h('div', { class: 'callout warn', id: 'dash-questions' }, icon('circle-help'),
+        h('div', { style: { flex: 1 } }, h('strong', null, t('repeat.dashTitle', { n: F.num(d.questions.length) })), h('div', { class: 'small' }, t('repeat.dashText'))),
+        h('a', { class: 'btn btn-sm', href: '#iptaller' }, t('repeat.answer'), icon('arrow-right'))) : null;
+
+      return h('div', { class: 'stack' }, filters, ask, kpis,
         h('div', { class: 'grid-3' }, h('div', { class: 'wide' }, monthly), renewCard),
+        kinds,
         h('div', { class: 'grid-3' }, companyCard, catCard, payCard),
         h('div', { class: 'grid-2' }, oppCard, taskCard));
     }

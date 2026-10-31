@@ -32,8 +32,10 @@
   var NAV = [
     { id: 'panel', icon: 'layout-dashboard', label: 'nav.dashboard' },
     { id: 'musteriler', icon: 'users', label: 'nav.customers', count: function () { return Store.customers.size; } },
-    { id: 'policeler', icon: 'file-text', label: 'nav.policies', count: function () { return Store.policies.size; } },
+    { id: 'policeler', icon: 'file-text', label: 'nav.policies', count: function () { return Store.derived().policies.length; } },
     { id: 'aylar', icon: 'calendar-days', label: 'nav.months', count: function () { return Store.derived().months.length; } },
+    // rows written again without minus amounts wait for an answer there
+    { id: 'iptaller', icon: 'ban', label: 'nav.cancels', badge: function () { return Store.derived().questions.length; } },
     { id: 'yenilemeler', icon: 'refresh-cw', label: 'nav.renewals', badge: function () { return App.dueCount(); } },
     { id: 'tahsilat', icon: 'wallet', label: 'nav.collections', count: function () { return App.openBalanceCount(); } },
     { id: 'gorevler', icon: 'list-checks', label: 'nav.tasks', badge: function () { return Store.openTaskCount(); }, bad: true },
@@ -57,7 +59,7 @@
   // ------------------------------------------------------------------ routing
   var SIMPLE = {
     panel: 'dashboard', musteriler: 'customers', policeler: 'policies', aylar: 'months', yenilemeler: 'renewals',
-    tahsilat: 'collections', gorevler: 'tasks', raporlar: 'reports', 'ice-aktar': 'import', ayarlar: 'settings', yeni: 'form'
+    tahsilat: 'collections', gorevler: 'tasks', raporlar: 'reports', iptaller: 'cancels', 'ice-aktar': 'import', ayarlar: 'settings', yeni: 'form'
   };
 
   App.parseRoute = function () {

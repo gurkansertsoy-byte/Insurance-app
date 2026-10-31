@@ -157,10 +157,11 @@
   function parseNumber(v) {
     if (v == null || v === '' || typeof v === 'boolean') return null;
     if (typeof v === 'number') return isFinite(v) ? v : null;
-    var s = str(v).trim();
+    var s = str(v).trim().replace(/[−–]/g, '-');
     if (!s) return null;
+    // the sign can sit before or after the currency: "-₺1.200", "₺-1.200", "1.200 TL-", "(1.200)"
+    s = s.replace(/₺|\$|€|£/g, '').replace(/\b(TL|TRY|YTL|USD|EUR)\b/gi, '').trim();
     var neg = /^\(.*\)$/.test(s) || /^-/.test(s) || /-$/.test(s);
-    s = s.replace(/₺|\$|€|£/g, '').replace(/\b(TL|TRY|YTL|USD|EUR)\b/gi, '');
     s = s.replace(/[\s '’()+\-]/g, '');
     if (!s || /[^0-9.,]/.test(s) || !/\d/.test(s)) return null;
     var lastDot = s.lastIndexOf('.');
@@ -208,6 +209,29 @@
     var n = parseNumber(s);
     if (n != null) return n > 0;
     return null;
+  }
+
+  /**
+   * What the YENİ İŞ cell says, case-insensitive: 'ek' | 'cancel' | 'zeyil' | 'renewal' | 'new' | 'unknown'.
+   * "ek" anywhere ("İMM EK", "Yenileme - Ek") makes it ek and nothing else; an empty cell is unknown.
+   * Evet / X / Hayır and the like (sheets that tick new business) are new / renewal.
+   */
+  function businessKind(v) {
+    if (v === true) return 'new';
+    if (v === false) return 'renewal';
+    if (v == null) return 'unknown';
+    var s = str(v).trim();
+    if (!s) return 'unknown';
+    var f = fold(s);
+    var words = f ? f.split(' ') : [];
+    function starts(re) { return words.some(function (w) { return re.test(w); }); }
+    if (starts(/^eki?$/)) return 'ek';
+    if (starts(/^iptal/)) return 'cancel';
+    if (starts(/^zey/)) return 'zeyil';
+    if (starts(/^yenile/)) return 'renewal';
+    if (/^[✓✔☑+]+$/.test(s) || starts(/^yeni$/) || YES_RE.test(f)) return 'new';
+    if (/^[✗✘×]+$/.test(s) || NO_RE.test(f)) return 'renewal';
+    return 'unknown';
   }
 
   // ------------------------------------------------------------------ dates (ISO yyyy-mm-dd strings)
@@ -503,7 +527,7 @@
     normalizePhone: normalizePhone, formatPhone: formatPhone, isMobile: isMobile, extractContact: extractContact,
     whatsappUrl: whatsappUrl,
     plateKey: plateKey, normalizePlate: normalizePlate, isValidPlate: isValidPlate,
-    parseNumber: parseNumber, parseIntSafe: parseIntSafe, round2: round2, parseYesNo: parseYesNo,
+    parseNumber: parseNumber, parseIntSafe: parseIntSafe, round2: round2, parseYesNo: parseYesNo, businessKind: businessKind,
     parseDate: parseDate, excelSerialToISO: excelSerialToISO, isoToSerial: isoToSerial, isoFromYMD: isoFromYMD,
     addDays: addDays, addMonths: addMonths, addYears: addYears, diffDays: diffDays,
     todayISO: todayISO, setToday: setToday, monthKeyOf: monthKeyOf, currentMonthKey: currentMonthKey,

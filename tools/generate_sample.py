@@ -7,6 +7,10 @@ header wording, order, upper/lower case, Turkish characters vs. ASCII,
 duplicate columns, title rows above the header, TOPLAM rows, blank rows, dates
 and amounts stored as text, TC numbers stored as numbers or text, missing or
 mistyped TC numbers and two pairs of different customers with the same name.
+Cancellations are written both ways agencies write them: in the İptal block at
+the end of each page, and as the policy's own row written again with minus
+amounts. YENİ İŞ holds YENİ İŞ / YENİLEME / İPTAL / EK / ZEYİL words, ticks or
+nothing; some rows have no commission.
 
 All people, TC numbers, phone numbers and plates are random and fictional.
 The TC numbers satisfy the checksum only so that the validator can be tested.
@@ -17,8 +21,10 @@ Outputs (in sample-data/):
 """
 import datetime as dt
 import json
+import math
 import os
 import random
+import re
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -506,6 +512,114 @@ cancels.append({'month': '2026-09', 'company': 'SOMPO', 'policy': 'TRAFİK', 'in
 cancels.append({'month': '2026-05', 'company': 'ANADOLU SİGORTA', 'policy': 'KASKO', 'insured': 'Nuri Tatlı',
                 'card': 0, 'account': 0, 'cash': 3200.0, 'target': None, 'expect': 'none'})
 
+# ---------------------------------------------------------------- the same policy written again
+# The policy's own row written again in a later month (or lower on the same page) before its year is over:
+# minus Poliçe tutarı = refund to the customer, minus Komisyon = commission the insurer takes back. Plus amounts
+# are questions for the user (even when YENİ İŞ says İPTAL); ZEYİL / EK rows add to the policy.
+rng2 = random.Random(SEED * 7 + 3)
+MONTH_KEYS = [month_key(*ym) for ym in MONTHS]
+extra = []  # rows that are no new policies: cancellations, questions, additions
+
+
+def day_in(key, after=None):
+    y, m = int(key[:4]), int(key[5:])
+    first = dt.date(y, m, 1)
+    last = dt.date(y + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1)
+    if key == '2026-10':
+        last = min(last, dt.date(2026, 10, 28))
+    lo = max(first, after + dt.timedelta(days=1)) if after else first
+    return lo + dt.timedelta(days=rng2.randint(0, max(0, (last - lo).days)))
+
+
+def repeat_ok(r, key=None, same_month=False):
+    if r.get('cancelled') or r.get('repeated') or r['kind'] == 'seyahat' or r['renewal_of']:
+        return False
+    if r['customer_name'] in ('Kemal Aydoğdu', 'Serdar Bozkurt') or r['policy_no'] in renewal_sources:
+        return False
+    if (r['end'] - TODAY).days <= 45:
+        return False
+    if key is None:
+        return True
+    if same_month:
+        return r['month'] == key
+    return r['month'] < key < r['end'].strftime('%Y-%m')
+
+
+def repeat_row(r, key, role, premium, commission, text, note='', pay=None, kind=None, policy_name=None):
+    day = day_in(key, r['start'] if key == r['month'] else None)
+    row = dict(r)
+    row.update({'month': key, 'premium': premium, 'commission': commission, 'business_text': text, 'note': note,
+                'role': role, 'of': r['policy_no'], 'sort_day': day, 'renewal_of': None,
+                'company_text': rng2.choice(INSURERS[r['insurer']])})
+    row['card'], row['account'], row['cash'] = pay if pay is not None else (0, 0, 0)
+    if kind:
+        row['kind'], row['policy_name'] = kind, policy_name
+    r['repeated'] = True
+    extra.append(row)
+    return row
+
+
+def minus_split(r, refund):
+    paid = r['card'] + r['account'] + r['cash']
+    card = -round(refund * r['card'] / paid, 2) if r['card'] else 0
+    account = -round(refund * r['account'] / paid, 2) if r['account'] else 0
+    cash = round(-refund - card - account, 2) if r['cash'] else 0
+    return card, account, cash
+
+
+def cancel_again(r, key, text):
+    share = rng2.choice([0.55, 0.6, 0.7, 0.8, 0.9, 1.0])
+    refund = round(r['premium'] * share, 2)
+    reclaim = round(r['commission'] * share, 2)
+    return repeat_row(r, key, 'cancel', -refund, -reclaim, text, rng2.choice(['Araç satıldı', 'Müşteri talebi', '', 'Şirket değişikliği']),
+                      pay=minus_split(r, refund))
+
+
+pool = [r for r in records if repeat_ok(r)]
+rng2.shuffle(pool)
+targets = []
+for key in ['2026-01', '2026-03', '2026-06', '2026-08', '2026-09']:
+    r = next(x for x in pool if repeat_ok(x, key))
+    cancel_again(r, key, rng2.choice(['İPTAL', 'İPTAL', 'iptal', '']))
+    targets.append(r)
+# one written with nothing in YENİ İŞ: the minus amounts say it all
+r = next(x for x in pool if repeat_ok(x, '2026-07'))
+cancel_again(r, '2026-07', '')
+# cancelled in the month it was sold: the row written again lower on the same page
+r = next(x for x in pool if repeat_ok(x, '2026-05', same_month=True))
+cancel_again(r, '2026-05', 'İPTAL')
+# plus amounts: asked
+r = next(x for x in pool if repeat_ok(x, '2026-04') and x['kind'] in ('kasko', 'konut', 'dask'))
+repeat_row(r, '2026-04', 'ask', round(r['premium'] * 0.6, 2), round(r['commission'] * 0.6, 2), '')
+r = next(x for x in pool if repeat_ok(x, '2026-10') and x['kind'] in ('trafik', 'tss', 'isyeri'))
+repeat_row(r, '2026-10', 'ask', round(r['premium'] * 0.4, 2), None, 'YENİLEME')
+# additions: ZEYİL with a small premium, İMM written on a kasko policy as EK
+for key in ['2026-02', '2026-09']:
+    r = next(x for x in pool if repeat_ok(x, key) and x['kind'] in ('kasko', 'isyeri', 'konut'))
+    amount = round(rng2.uniform(250, 1500) / 10) * 10
+    repeat_row(r, key, 'endorse', amount, round(amount * 0.15, 2), rng2.choice(['ZEYİL', 'Zeyil']))
+r = next(x for x in pool if repeat_ok(x, '2026-06') and x['kind'] == 'kasko')
+amount = round(rng2.uniform(900, 2400) / 10) * 10
+repeat_row(r, '2026-06', 'endorse', amount, round(amount * 0.15, 2), 'İMM EK', kind='imm', policy_name='İMM')
+# a policy from before the file, cancelled in March: nothing to find
+owner = next(x for x in pool if repeat_ok(x) and x['month'] <= '2026-03')
+orphan = dict(owner)
+orphan.update({'month': '2026-03', 'policy_no': owner['policy_no'][:3] + '2024' + owner['policy_no'][-6:], 'premium': -3150.0,
+               'commission': -472.5, 'business_text': 'İPTAL', 'note': '2025 poliçesi', 'role': 'orphan', 'of': None,
+               'sort_day': day_in('2026-03'), 'card': 0, 'account': 0, 'cash': -3150.0, 'renewal_of': None})
+extra.append(orphan)
+
+# no commission written: the app works it out (Trafik 10 %, others 15 %)
+for r in rng2.sample([x for x in records if x['customer_name'] != 'Kemal Aydoğdu' and not x.get('repeated')], 14):
+    r['commission_missing'] = True
+# YENİ İŞ: the words agencies write, and empty cells
+ek_rec = next(x for x in pool if repeat_ok(x) and not x.get('repeated') and x['kind'] == 'imm' and not x.get('commission_missing'))
+ek_rec['business_text'] = 'İMM EK'
+renewal_ek = next(x for x in pool if repeat_ok(x) and not x.get('repeated') and x is not ek_rec and x['kind'] == 'kasko' and not x['new_business'])
+renewal_ek['business_text'] = 'Yenileme - Ek'
+for r in rng2.sample([x for x in records if x['customer_name'] != 'Kemal Aydoğdu' and 'business_text' not in x], 12):
+    r['business_text'] = ''
+
 # ---------------------------------------------------------------- sheet layouts
 V1 = ['Poliçe adı', 'Poliçe bitiş tarihi', 'İletişim', 'Meslek', 'Adı soyadı', 'Tc kimlik no', 'Plaka', 'Seri no',
       'Basamak', 'Poliçe numarası', 'Şirket poliçe tutarı', 'Yeni iş', 'Komisyon', 'Açıklama', 'Şirket',
@@ -533,10 +647,10 @@ LAYOUTS = {
     '2026-01': dict(sheet='OCAK 2026', headers=V1, yes=('EVET', 'HAYIR'), totals=True),
     '2026-02': dict(sheet='ŞUBAT 2026', headers=V3, title='ŞUBAT 2026 - POLİÇE ÜRETİMİ', yes=('YENİ', 'YENİLEME')),
     '2026-03': dict(sheet='MART', headers=V2, yes=('Evet', 'Hayır'), text_values=True),
-    '2026-04': dict(sheet='Nisan 2026', headers=V4, yes=('X', ''), block_gap=3),
-    '2026-05': dict(sheet='MAYIS 2026', headers=V1, yes=('EVET', 'HAYIR'), totals=True),
+    '2026-04': dict(sheet='Nisan 2026', headers=V4, yes=('Yeni iş', 'Yenileme'), block_gap=3),
+    '2026-05': dict(sheet='MAYIS 2026', headers=V1, yes=('YENİ İŞ', 'YENİLEME'), totals=True),
     '2026-06': dict(sheet='Haziran 2026', headers=V3, yes=('YENİ', 'YENİLEME'), block_gap=0),
-    '2026-07': dict(sheet='Temmuz-2026', headers=V1, yes=('X', ''), blank_rows=True),
+    '2026-07': dict(sheet='Temmuz-2026', headers=V1, yes=('YENİ İŞ', 'YENİLEME'), blank_rows=True),
     '2026-08': dict(sheet='08.2026', headers=V2, yes=('Evet', '')),
     '2026-09': dict(sheet='EYLÜL 2026', headers=V4, yes=('X', ''), totals=True),
     '2026-10': dict(sheet='Ekim 2026', headers=V1, title='EKİM 2026 ÜRETİM', yes=('EVET', 'HAYIR')),
@@ -544,10 +658,10 @@ LAYOUTS = {
 
 # rows with deliberately missing / mistyped TC numbers (customer still has a name and phone)
 by_month = {}
-for rec in records:
+for rec in records + extra:
     by_month.setdefault(rec['month'], []).append(rec)
 for k in by_month:
-    by_month[k].sort(key=lambda r: (r['start'], r['policy_no']))
+    by_month[k].sort(key=lambda r: (r.get('sort_day', r['start']), r['policy_no']))
 
 individual_recs = [r for r in records if not next(c for c in customers if c.id == r['customer_id']).corporate
                    and r['customer_name'] not in HOMONYMS and r['customer_name'] != 'Kemal Aydoğdu']
@@ -659,8 +773,8 @@ for (y, m) in MONTHS:
             'step': rec['step'] if rec['step'] is not None else '',
             'policy_no': rec['policy_no'],
             'premium': rec['premium'],
-            'new': yes if rec['new_business'] else no,
-            'commission': rec['commission'],
+            'new': rec['business_text'] if 'business_text' in rec else (yes if rec['new_business'] else no),
+            'commission': None if rec.get('commission_missing') else rec['commission'],
             'note': rec['note'],
             'company': rec['company_text'],
             'insured': fmt_name(rec['insured'], name_style),
@@ -723,9 +837,10 @@ for (y, m) in MONTHS:
                     cell.value = v
             else:
                 cell.value = v if v != '' else None
+        rec['_text'] = values['new']
         stats['count'] += 1
         stats['premium'] += rec['premium']
-        stats['commission'] += rec['commission']
+        stats['commission'] += values['commission'] or 0
         stats['newBusiness'] += 1 if rec['new_business'] else 0
         stats['card'] += rec['card']
         stats['account'] += rec['account']
@@ -750,8 +865,53 @@ xlsx_path = os.path.join(OUT_DIR, 'ornek-portfoy.xlsx')
 wb.save(xlsx_path)
 
 # ---------------------------------------------------------------- ground truth
+# the app's own rules, mirrored: what YENİ İŞ says, commission when none is written, which rows are policies
+FOLD = str.maketrans('çğıöşüâîû', 'cgiosuaiu')
+YES_WORDS = {'evet', 'e', 'x', 'var', 'yes', 'y', 'true', '1', 'yeni', 'yeni is', 'yeni musteri', 'yeni police', 'ok', 'tamam', 'v'}
+NO_WORDS = {'hayir', 'h', 'yok', 'no', 'n', 'false', '0', 'yenileme', 'yenilendi', 'yenileme isi', 'eski', 'eski musteri', 'devam'}
+
+
+def fold(text):
+    return re.sub(r'[^a-z0-9]+', ' ', tr_lower(str(text)).translate(FOLD)).strip()
+
+
+def business_kind(text):
+    f = fold(text or '')
+    if not f:
+        return 'unknown'
+    words = f.split()
+    if any(w in ('ek', 'eki') for w in words):
+        return 'ek'
+    if any(w.startswith('iptal') for w in words):
+        return 'cancel'
+    if any(w.startswith('zey') for w in words):
+        return 'zeyil'
+    if any(w.startswith('yenile') for w in words):
+        return 'renewal'
+    if 'yeni' in words or f in YES_WORDS:
+        return 'new'
+    if f in NO_WORDS:
+        return 'renewal'
+    return 'unknown'
+
+
+def round2(n):  # as the app rounds (half up)
+    return math.floor((n + 2.220446049250313e-16) * 100 + 0.5) / 100
+
+
+def commission_of(r):
+    if not r.get('commission_missing') and r['commission'] is not None:
+        return r['commission']
+    return round2(r['premium'] * (0.10 if r['kind'] == 'trafik' else 0.15))
+
+
+rows_all = records + extra
+policies_all = [r for r in rows_all if r.get('role') not in ('cancel', 'orphan')]  # cancelling rows are no policies
+row_cancels = [r for r in extra if r.get('role') in ('cancel', 'orphan')]
+by_no = {r['policy_no']: r for r in records}
+
 cust_policies = {}
-for r in records:
+for r in policies_all:
     cust_policies.setdefault(r['customer_id'], []).append(r)
 multi_month = [cid_ for cid_, rs in cust_policies.items() if len({r['month'] for r in rs}) >= 2]
 show_recs = cust_policies[showcase.id]
@@ -763,18 +923,49 @@ for r in records:
         if not renewed:
             renewal_window.append(r['policy_no'])
 
+months_out = {}
+for key in MONTH_KEYS:
+    rows = by_month.get(key, [])
+    pol = [r for r in rows if r.get('role') not in ('cancel', 'orphan')]
+    kinds = {k: 0 for k in ('new', 'renewal', 'cancel', 'ek', 'zeyil', 'unknown')}
+    for r in rows:
+        kinds[business_kind(r['_text'])] += 1
+    months_out[key] = {
+        'rows': len(rows), 'count': len(pol),
+        'premium': round2(sum(r['premium'] for r in pol)),
+        'commission': round2(sum(commission_of(r) for r in pol)),
+        'newBusiness': sum(1 for r in pol if business_kind(r['_text']) == 'new'),
+        'card': round2(sum(r['card'] for r in pol)), 'account': round2(sum(r['account'] for r in pol)),
+        'cash': round2(sum(r['cash'] for r in pol)),
+        'kinds': kinds,
+    }
+estimated = [r for r in policies_all if r.get('commission_missing') or r['commission'] is None]
+
+
+def row_refund(r):
+    return abs(r['premium'])
+
+
+def row_reclaim(r):
+    if r['commission'] is not None:
+        return abs(r['commission'])
+    return round2(abs(r['premium']) * (0.10 if r['kind'] == 'trafik' else 0.15))
+
+
 expected = {
     'seed': SEED,
     'today': TODAY.isoformat(),
     'sheetMonths': sheet_month,
-    'months': expected_months,
-    'totalPolicies': len(records),
-    'totalCustomers': len(cust_policies),
+    'months': months_out,
+    'totalRows': len(rows_all),
+    'totalPolicies': len(policies_all),
+    'totalCustomers': len({r['customer_id'] for r in rows_all}),
     'multiMonthCustomers': len(multi_month),
-    'totalPremium': round(sum(r['premium'] for r in records), 2),
-    'totalCommission': round(sum(r['commission'] for r in records), 2),
-    'totalAccount': round(sum(r['account'] for r in records), 2),
-    'newBusiness': sum(1 for r in records if r['new_business']),
+    'totalPremium': round2(sum(r['premium'] for r in policies_all)),
+    'totalCommission': round2(sum(commission_of(r) for r in policies_all)),
+    'estimatedCommission': {'count': len(estimated), 'total': round2(sum(commission_of(r) for r in estimated))},
+    'totalAccount': round2(sum(r['account'] for r in policies_all)),
+    'newBusiness': sum(1 for r in policies_all if business_kind(r['_text']) == 'new'),
     'renewalsInFile': renewed_count,
     'homonyms': HOMONYMS,
     'missingTcRows': len(missing_tc_ids),
@@ -797,14 +988,27 @@ expected = {
                   'policyNo': c['target']['policy_no'] if c['target'] else None,
                   'refund': round(c['card'] + c['account'] + c['cash'], 2)} for c in cancels],
     },
-    'totalOutstanding': round(sum(max(0.0, r['account'] - sum(c['account'] for c in cancels if c['target'] is r))
-                                  for r in records), 2),
-    'byKind': {k: sum(1 for r in records if r['kind'] == k) for k in POLICY_KINDS},
-    'byInsurer': {k: sum(1 for r in records if r['insurer'] == k) for k in INSURERS},
+    'totalOutstanding': round2(sum(max(0.0, r['account'] - sum(c['account'] for c in cancels if c['target'] is r)
+                                       - sum(-x['account'] for x in row_cancels if x.get('of') == r['policy_no']))
+                                   for r in policies_all if r['account'] > 0)),
+    'repeats': {
+        'cancel': sum(1 for r in extra if r['role'] == 'cancel'), 'orphan': sum(1 for r in extra if r['role'] == 'orphan'),
+        'ask': sum(1 for r in extra if r['role'] == 'ask'), 'endorse': sum(1 for r in extra if r['role'] == 'endorse'),
+        'refundTotal': round2(sum(row_refund(r) for r in row_cancels)),
+        'reclaimTotal': round2(sum(row_reclaim(r) for r in row_cancels)),
+        'list': [{'month': r['month'], 'policyNo': r['policy_no'], 'role': r['role'], 'of': r.get('of'),
+                  'ofMonth': by_no[r['of']]['month'] if r.get('of') in by_no else None, 'text': r['_text'],
+                  'premium': r['premium'], 'commission': r['commission'], 'name': r['customer_name']} for r in extra],
+    },
+    'blockReclaimTotal': round2(sum(round2((c['card'] + c['account'] + c['cash']) * (0.10 if c['target'] is not None and c['target']['kind'] == 'trafik' else 0.15))
+                                    for c in cancels if c['expect'] == 'auto')),
+    'byKind': {k: sum(1 for r in policies_all if r['kind'] == k) for k in POLICY_KINDS},
+    'byInsurer': {k: sum(1 for r in policies_all if r['insurer'] == k) for k in INSURERS},
 }
 with open(os.path.join(OUT_DIR, 'expected.json'), 'w', encoding='utf-8') as f:
     json.dump(expected, f, ensure_ascii=False, indent=2)
 
 print(f'wrote {xlsx_path}')
-print(f'{len(records)} policies, {len(cust_policies)} customers, {len(multi_month)} in 2+ months, '
-      f'{renewed_count} renewals inside the file, {len(renewal_window)} due in 30 days, {len(cancels)} cancellations')
+print(f'{len(rows_all)} rows: {len(policies_all)} policies, {len(row_cancels)} cancelling rows; {expected["totalCustomers"]} customers, '
+      f'{len(multi_month)} in 2+ months, {renewed_count} renewals inside the file, {len(renewal_window)} due in 30 days, '
+      f'{len(cancels)} İptal block rows, {len(estimated)} without commission')

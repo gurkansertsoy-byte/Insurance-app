@@ -12,10 +12,13 @@
   }
   function affix(el) { return h('div', { class: 'input-affix left' }, el, h('span', { class: 'affix' }, '₺')); }
 
-  /** "Kart ₺1.200,00 · Nakit ₺300,00" */
+  /** "Kart ₺1.200,00 · Nakit ₺300,00" (a cancelling row of the table: "İade ₺1.500,00"), and the commission given back */
   App.refundText = function (x) {
     var parts = [];
     [['card', 'field.card'], ['account', 'field.account'], ['cash', 'field.cash']].forEach(function (k) { if (x[k[0]]) parts.push(t(k[1]) + ' ' + F.money(x[k[0]])); });
+    if (x.kind === 'row' && x.refund && !parts.length) parts.push(t('cancel.refundShort') + ' ' + F.money(x.refund));
+    var refund = Store.refundOf(x);
+    if (refund) parts.push(t('cancel.reclaimLine', { v: F.money(Store.reclaimOf(x)) }));
     return parts.length ? parts.join(' · ') : t('cancel.noRefund');
   };
   App.cancelLine = function (x) { return [x.insuredName, x.policyText, x.company].filter(Boolean).join(' · ') || '—'; };
@@ -154,36 +157,70 @@
     draw();
   };
 
-  App.cancelStatus = function (x) {
+  // [text key, tone] of a cancellation's match
+  function statusOf(x) {
     var p = x.policyId && Store.policies.get(x.policyId);
-    if (p) return UI.pill(t(x.match === 'auto' ? 'cancel.m.auto' : 'cancel.m.manual'), 'good');
-    if (x.match === 'ambiguous') return UI.pill(t('cancel.m.ambiguous', { n: (x.candidates || []).length }), 'warn');
-    if (x.locked) return UI.pill(t('cancel.m.notInFile'), 'plain');
-    return UI.pill(t('cancel.m.none'), 'bad');
-  };
+    if (x.kind === 'row') return p ? [x.match === 'manual' ? 'cancel.m.rowManual' : 'cancel.m.rowAuto', 'good'] : ['cancel.m.rowNone', 'plain'];
+    if (p) return [x.match === 'auto' ? 'cancel.m.auto' : 'cancel.m.manual', 'good'];
+    if (x.match === 'ambiguous') return ['cancel.m.ambiguous', 'warn'];
+    if (x.locked) return ['cancel.m.notInFile', 'plain'];
+    return ['cancel.m.none', 'bad'];
+  }
+  App.cancelStatusText = function (x) { return t(statusOf(x)[0], { n: (x.candidates || []).length }); };
+  App.cancelStatus = function (x) { return UI.pill(App.cancelStatusText(x), statusOf(x)[1]); };
 
   // ------------------------------------------------------------------ the İptal block of a month page
   App.cancelSection = function (monthKey) {
     var list = Store.cancellationsOf(monthKey);
-    var total = U.round2(U.sum(list, Portfolio.refundOf));
+    var questions = Store.derived().questions.filter(function (q) { return q.month === monthKey; });
+    var total = U.round2(U.sum(list, Store.refundOf));
+    var reclaim = U.round2(U.sum(list, Store.reclaimOf));
     var head = h('div', { class: 'card-head' }, h('h2', null, t('cancel.sectionTitle')),
-      h('span', { class: 'sub' }, list.length ? t('cancel.summary', { n: list.length, v: F.money(total) }) : t('cancel.sectionSub')),
+      h('span', { class: 'sub' }, list.length ? t('cancel.summaryFull', { n: list.length, v: F.money(total), k: F.money(reclaim) }) : t('cancel.sectionSub')),
       h('div', { class: 'actions' }, h('button', { type: 'button', class: 'btn btn-sm', id: 'cancel-add', onClick: function () { App.cancelRowDialog(monthKey); } }, icon('plus'), t('cancel.add'))));
-    if (!list.length) return h('section', { class: 'card', id: 'month-cancels' }, head, h('div', { class: 'card-body' }, h('p', { class: 'muted small' }, t('cancel.emptyText'))));
-    var L = { company: t('cancel.h.company'), policy: t('cancel.h.policy'), insured: t('cancel.h.insured'), card: t('field.card'), account: t('field.account'), cash: t('field.cash'), match: t('cancel.colMatch'), status: t('cancel.colStatus') };
+    var ask = questions.length ? h('div', { class: 'card-body', id: 'month-questions' }, App.repeatQuestions(questions)) : null;
+    if (!list.length) return h('section', { class: 'card', id: 'month-cancels' }, head, ask, h('div', { class: 'card-body' }, h('p', { class: 'muted small' }, t('cancel.emptyText'))));
+    return h('section', { class: 'card', id: 'month-cancels', style: { overflow: 'hidden' } }, head, ask,
+      h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, App.cancelTable(list, false)));
+  };
+
+  /** Table of cancellations (İptal block rows and cancelling rows of the table); withMonth adds the month and, to keep
+      the table on the screen, shows Kart / Cari / Nakit under the refund instead of in columns of their own. */
+  App.cancelTable = function (list, withMonth) {
+    var split = !withMonth;
+    var L = { month: t('common.month'), company: t('cancel.h.company'), policy: t('cancel.h.policy'), insured: t('cancel.h.insured'), card: t('field.card'), account: t('field.account'), cash: t('field.cash'),
+      refund: t('cancel.colRefund'), match: t('cancel.colMatch'), status: t('cancel.colStatus') };
+    var total = U.round2(U.sum(list, Store.refundOf));
+    var reclaim = U.round2(U.sum(list, Store.reclaimOf));
     var rows = list.map(function (x) {
       var p = x.policyId && Store.policies.get(x.policyId);
       var c = p && Store.customers.get(p.customerId);
-      return h('tr', { id: 'cx-' + x.id },
+      var monthKey = x.month;
+      var est = x.kind === 'row' ? x.reclaimEstimated : true;
+      return h('tr', { id: 'cx-' + x.id, class: x.kind === 'row' ? 'cancel-row-kind' : null },
+        withMonth ? h('td', { 'data-label': L.month, style: { whiteSpace: 'nowrap' } }, h('a', { href: '#ay-' + x.month }, F.month(x.month, true))) : null,
         h('td', { 'data-label': L.company }, x.company || '—'),
-        h('td', { 'data-label': L.policy }, x.policyText || '—'),
+        h('td', { 'data-label': L.policy }, x.policyText || '—', x.kind === 'row' && x.policyNo ? h('div', { class: 'small muted mono' }, x.policyNo) : null),
         h('td', { class: 'name-cell' }, x.insuredName || '—'),
-        h('td', { class: 'r num', 'data-label': L.card }, x.card ? F.money(x.card) : ''),
-        h('td', { class: 'r num', 'data-label': L.account }, x.account ? F.money(x.account) : ''),
-        h('td', { class: 'r num', 'data-label': L.cash }, x.cash ? F.money(x.cash) : ''),
+        split ? h('td', { class: 'r num', 'data-label': L.card }, x.card ? F.money(x.card) : '') : null,
+        split ? h('td', { class: 'r num', 'data-label': L.account }, x.account ? F.money(x.account) : '') : null,
+        split ? h('td', { class: 'r num', 'data-label': L.cash }, x.cash ? F.money(x.cash) : '') : null,
+        h('td', { class: 'r num', 'data-label': L.refund }, h('div', null, F.money(Store.refundOf(x))),
+          split ? null : h('div', { class: 'small muted' }, [['card', L.card], ['account', L.account], ['cash', L.cash]].filter(function (k) { return x[k[0]]; })
+            .map(function (k) { return k[1] + ' ' + F.money(x[k[0]]); }).join(' · ')),
+          h('div', { class: 'small muted', title: est ? t('cancel.reclaimEstTitle') : null }, t('cancel.reclaimShort', { v: F.money(Store.reclaimOf(x)) }) + (est ? ' *' : ''))),
         h('td', { 'data-label': L.match, class: 'full' }, p ? h('div', null, h('a', { href: '#musteri-' + p.customerId }, c ? c.name : '—'),
-          h('div', { class: 'row tight small muted', style: { columnGap: '8px' } }, UI.items(p.policyType, F.month(p.month, true), Store.companyLabel(p.company), p.policyNo ? h('span', { class: 'mono' }, p.policyNo) : null))) : h('span', { class: 'muted' }, '—')),
-        h('td', { 'data-label': L.status }, App.cancelStatus(x)),
+          h('div', { class: 'row tight small muted', style: { columnGap: '8px' } }, UI.items(p.policyType, F.month(p.month, true), Store.companyLabel(p.company), p.policyNo ? h('span', { class: 'mono', style: { whiteSpace: 'nowrap' } }, p.policyNo) : null))) : h('span', { class: 'muted' }, '—')),
+        h('td', { 'data-label': L.status }, App.cancelStatus(x), x.kind === 'row' && x.source && x.source.row ? h('div', { class: 'small muted' }, t('cancel.rowOfPage', { row: x.source.row })) : null),
+        x.kind === 'row' ? h('td', { class: 'actions-cell' }, h('div', { class: 'row tight', style: { flexWrap: 'nowrap' } },
+          x.match === 'manual' ? h('button', { type: 'button', class: 'btn btn-sm', id: 'cx-undo-' + x.rowId, onClick: function () { Store.decideRepeat(x.rowId, null); UI.toast(t('cancel.decisionUndone')); } }, icon('undo-2'), t('cancel.undoDecision')) : null,
+          h('button', { type: 'button', class: 'btn btn-sm', id: 'cx-not-' + x.rowId, onClick: function () {
+            UI.confirm({ title: t('cancel.notTitle'), message: t('cancel.notMsg'), confirm: t('cancel.notGo') }).then(function (ok) {
+              if (!ok) return;
+              Store.decideRepeat(x.rowId, 'not');
+              UI.toast(t('cancel.notDone'), { action: { label: t('common.undo'), fn: function () { Store.decideRepeat(x.rowId, null); } } });
+            });
+          } }, icon('circle-x'), t('cancel.notCancel')))) :
         h('td', { class: 'actions-cell' }, h('div', { class: 'row tight', style: { flexWrap: 'nowrap' } },
           h('button', { type: 'button', class: 'btn btn-sm' + (p ? '' : ' btn-primary'), id: 'cx-pick-' + x.id, onClick: function () { App.cancelPicker(x); } }, icon('link-2'), p ? t('cancel.change') : t('cancel.pick')),
           h('button', { type: 'button', class: 'icon-btn sm', id: 'cx-edit-' + x.id, title: t('common.edit'), 'aria-label': t('common.edit'), onClick: function () { App.cancelRowDialog(monthKey, x); } }, icon('pencil')),
@@ -195,14 +232,42 @@
             });
           } }, icon('trash-2')))));
     });
-    var foot = h('tr', null, h('td', { colspan: 3, class: 'full' }, t('cancel.refundTotal')),
-      h('td', { class: 'r num', 'data-label': L.card }, F.money(U.sum(list, function (x) { return x.card; }))),
-      h('td', { class: 'r num', 'data-label': L.account }, F.money(U.sum(list, function (x) { return x.account; }))),
-      h('td', { class: 'r num', 'data-label': L.cash }, F.money(U.sum(list, function (x) { return x.cash; }))),
-      h('td', { colspan: 3, class: 'r', 'data-label': t('common.total') }, F.money(total)));
-    return h('section', { class: 'card', id: 'month-cancels', style: { overflow: 'hidden' } }, head,
-      h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, h('div', { class: 'table-wrap' }, h('table', { class: 'data responsive cancel-table' },
-        h('thead', null, h('tr', null, [L.company, L.policy, L.insured, L.card, L.account, L.cash, L.match, L.status, ''].map(function (x, i) { return h('th', { class: i >= 3 && i <= 5 ? 'r' : null }, x); }))),
-        h('tbody', null, rows), h('tfoot', null, foot)))));
+    var foot = h('tr', null, h('td', { colspan: withMonth ? 4 : 3, class: 'full' }, t('cancel.refundTotal')),
+      split ? h('td', { class: 'r num', 'data-label': L.card }, F.money(U.sum(list, function (x) { return x.card; }))) : null,
+      split ? h('td', { class: 'r num', 'data-label': L.account }, F.money(U.sum(list, function (x) { return x.account; }))) : null,
+      split ? h('td', { class: 'r num', 'data-label': L.cash }, F.money(U.sum(list, function (x) { return x.cash; }))) : null,
+      h('td', { class: 'r num', 'data-label': L.refund, id: withMonth ? 'all-cancels-total' : null }, h('div', null, F.money(total)), h('div', { class: 'small muted' }, t('cancel.reclaimShort', { v: F.money(reclaim) }))),
+      h('td', { colspan: 3 }));
+    var heads = (withMonth ? [L.month] : []).concat([L.company, L.policy, L.insured], split ? [L.card, L.account, L.cash] : [], [L.refund, L.match, L.status, '']);
+    var first = withMonth ? 4 : 3, last = first + (split ? 3 : 0);
+    return h('div', null, h('div', { class: 'table-wrap' }, h('table', { class: 'data responsive cancel-table' },
+        h('thead', null, h('tr', null, heads.map(function (x, i) { return h('th', { class: i >= first && i <= last ? 'r' : null }, x); }))),
+        h('tbody', null, rows), h('tfoot', null, foot))),
+      h('p', { class: 'small muted', style: { padding: '8px 16px 12px' } }, t('cancel.reclaimNote')));
+  };
+
+  // ------------------------------------------------------------------ the same policy number written again with plus amounts
+  /** "Is this an İptal?" for rows that write an earlier policy's number again with plus amounts. */
+  App.repeatQuestions = function (rows) {
+    return h('div', { class: 'stack', style: { gap: '10px' } }, rows.map(function (q) {
+      var r = Store.repeatOf(q.id);
+      var base = r && r.info.of && Store.policies.get(r.info.of);
+      var c = Store.customers.get(q.customerId);
+      var amt = Portfolio.rowCancelAmounts(q, base);
+      var reasons = r ? r.info.reasons : [];
+      return h('div', { class: 'callout warn repeat-question', id: 'rq-' + q.id }, icon('circle-help'),
+        h('div', { style: { flex: '1 1 320px', minWidth: 0 } },
+          h('strong', null, t(base ? 'repeat.qTitle' : 'repeat.qTitleOrphan', { no: q.policyNo || '—', month: F.month(q.month) })),
+          h('div', { class: 'small' }, t('repeat.qText', {
+            name: (c && c.name) || q.insuredName || '—', type: q.policyType || (base && base.policyType) || '—',
+            first: base ? F.month(base.month) : t('repeat.notInFile'), premium: F.money(q.premium || 0), commission: q.commission != null ? F.money(q.commission) : t('repeat.noCommission'),
+            word: q.businessText ? '“' + q.businessText + '”' : t('repeat.emptyWord')
+          })),
+          h('div', { class: 'small' }, t('repeat.qIfYes', { refund: F.money(amt.refund), reclaim: F.money(amt.reclaim) }) + (amt.reclaimEstimated ? ' ' + t('repeat.estimated') : '')),
+          reasons.length ? h('div', { class: 'small', style: { color: 'var(--bad-ink)', marginTop: '3px' } }, icon('triangle-alert'), ' ', t('repeat.differs', { what: reasons.map(function (k) { return t('repeat.diff.' + k); }).join(', ') })) : null),
+        h('div', { class: 'excel-notice-actions' },
+          h('button', { type: 'button', class: 'btn btn-sm btn-primary', id: 'rq-yes-' + q.id, onClick: function () { Store.decideRepeat(q.id, 'cancel'); UI.toast(t('repeat.yesDone')); } }, icon('ban'), t('repeat.yes')),
+          h('button', { type: 'button', class: 'btn btn-sm', id: 'rq-no-' + q.id, onClick: function () { Store.decideRepeat(q.id, 'not'); UI.toast(t('repeat.noDone')); } }, t('repeat.no'))));
+    }));
   };
 })();

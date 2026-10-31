@@ -210,7 +210,7 @@ test('sample workbook: every page has its İptal block and every cancellation fi
   assert.ok(a.sheets.every(s => s.cancelBlock), 'block found on all pages');
   assert.deepEqual(a.sheets.map(s => Importer.colLetter(s.cancelBlock.startCol)).filter(c => c === 'U').length, 6, 'the pages laid out like the agency sample start it at U');
   const built = Importer.buildRecords(a, {});
-  assert.equal(built.records.length, expected.totalPolicies, 'no İptal row became a policy');
+  assert.equal(built.records.length, expected.totalRows, 'no İptal row became a policy');
   assert.equal(built.cancels.length, expected.cancellations.total);
   const state = { customers: new Map(), policies: new Map() };
   P.importRecords(state, built.records, { fileName: 'ornek-portfoy.xlsx' });

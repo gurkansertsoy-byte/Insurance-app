@@ -200,8 +200,8 @@
     res.rows.forEach(function (x) {
       var v = plain(x.cells[col.col]);
       if (isEmpty(v)) { blank++; return; }
-      var b = U.parseYesNo(v);
-      var m = b === true ? yes : b === false ? no : null;
+      var k = U.businessKind(v);
+      var m = k === 'new' ? yes : k === 'renewal' ? no : null;
       if (m) m.set(String(v).trim(), (m.get(String(v).trim()) || 0) + 1);
     });
     function top(m) { var best = null, n = 0; m.forEach(function (k, v) { if (k > n) { best = v; n = k; } }); return best; }
@@ -486,6 +486,15 @@
       if (col.field === '_last') { last = U.collapse(cellText(v)); return; }
       var def = Schema.BY_KEY[col.field];
       if (!def) { extras[col.header] = cellText(v, opts.lang); return; }
+      if (col.field === 'newBusiness') {
+        // YENİ İŞ holds words (YENİ İŞ, YENİLEME, İPTAL, İMM EK, ZEYİL …) or a tick: kept as written
+        var bt = U.collapse(cellText(v, opts.lang));
+        if (!bt || fields.businessText) return;
+        fields.businessText = bt;
+        var kind = U.businessKind(bt);
+        if (kind === 'new' || kind === 'renewal') fields.newBusiness = kind === 'new';
+        return;
+      }
       var parsed = parseField(def.type, v, opts);
       if (def.type === 'phone') {
         var ct = U.extractContact(parsed);

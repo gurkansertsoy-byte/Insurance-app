@@ -24,15 +24,19 @@
   }
   App.saveWorkbook = save;
 
+  // month sheets carry every row of the month (the cancelling ones with their minus amounts); totals count the policies
   App.exportAll = function () {
-    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: Store.derived().policies, customers: Store.customers, monthsMeta: Store.months, lang: lang(), withSummary: true, withCustomers: true,
-      cancels: Array.from(Store.cancellations.values()), outstanding: Store.outstanding });
+    var d = Store.derived();
+    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: d.policies, rows: d.rows, customers: Store.customers, monthsMeta: Store.months, lang: lang(), withSummary: true, withCustomers: true,
+      cancels: Store.allCancels(), reclaimOf: Store.reclaimOf, outstanding: Store.outstanding });
     save(wb, 'portfoy-' + stamp() + '.xlsx');
   };
 
   App.exportMonths = function (keys) {
-    var list = Store.derived().policies.filter(function (p) { return keys.indexOf(p.month) >= 0; });
-    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: list, customers: Store.customers, monthsMeta: Store.months, lang: lang(), months: keys, cancels: Array.from(Store.cancellations.values()) });
+    var d = Store.derived();
+    var inKeys = function (p) { return keys.indexOf(p.month) >= 0; };
+    var wb = Exporter.portfolioWorkbook({ XLSX: window.XLSX, policies: d.policies.filter(inKeys), rows: d.rows.filter(inKeys), customers: Store.customers, monthsMeta: Store.months, lang: lang(), months: keys,
+      cancels: Store.allCancels(), reclaimOf: Store.reclaimOf });
     save(wb, (keys.length === 1 ? U.fold(U.monthLabel(keys[0], 'tr')).replace(/ /g, '-') : 'aylar') + '.xlsx');
   };
 
@@ -101,8 +105,9 @@
   };
 
   // ------------------------------------------------------------------ reports view
-  function filtered(vs) {
-    return Store.derived().policies.filter(function (p) {
+  function filtered(vs, all) {
+    var d = Store.derived();
+    return (all ? d.rows : d.policies).filter(function (p) {
       if (vs.from && p.month < vs.from) return false;
       if (vs.to && p.month > vs.to) return false;
       if (vs.company && (!p.company || U.companyKey(p.company) !== vs.company)) return false;
@@ -111,10 +116,11 @@
     });
   }
 
-  /** İptal rows in the report's period (and company / line of business, judged by the row or its policy). */
+  /** Cancellations in the report's period (and company / line of business, judged by the row or its policy):
+      İptal block rows and the rows that cancel an earlier policy by writing its number again. */
   function filteredCancels(vs) {
     var out = [];
-    Store.cancellations.forEach(function (x) {
+    Store.allCancels().forEach(function (x) {
       if (vs.from && x.month < vs.from) return;
       if (vs.to && x.month > vs.to) return;
       var p = x.policyId && Store.policies.get(x.policyId);
@@ -127,13 +133,17 @@
   }
 
   function cancelRowsByMonth(xs, list) {
-    var prod = new Map(Portfolio.aggregate(list, function (p) { return p.month; }, true).map(function (r) { return [r.key, r.premium]; }));
+    var prod = new Map(Portfolio.aggregate(list, function (p) { return p.month; }, true).map(function (r) { return [r.key, r]; }));
     var by = U.groupBy(xs, function (x) { return x.month; });
     return Array.from(by.keys()).sort().map(function (k) {
       var g = by.get(k);
-      var refund = U.round2(U.sum(g, Portfolio.refundOf));
-      return { key: k, n: g.length, card: U.round2(U.sum(g, function (x) { return x.card; })), account: U.round2(U.sum(g, function (x) { return x.account; })),
-        cash: U.round2(U.sum(g, function (x) { return x.cash; })), refund: refund, premium: prod.get(k) || 0, net: U.round2((prod.get(k) || 0) - refund) };
+      var refund = U.round2(U.sum(g, Store.refundOf));
+      var reclaim = U.round2(U.sum(g, Store.reclaimOf));
+      var m = prod.get(k) || { premium: 0, commission: 0 };
+      return { key: k, n: g.length, rows: g.filter(function (x) { return x.kind === 'row'; }).length,
+        card: U.round2(U.sum(g, function (x) { return x.card; })), account: U.round2(U.sum(g, function (x) { return x.account; })),
+        cash: U.round2(U.sum(g, function (x) { return x.cash; })), refund: refund, reclaim: reclaim,
+        premium: m.premium, net: U.round2(m.premium - refund), netCommission: U.round2(m.commission - reclaim) };
     });
   }
 
@@ -193,23 +203,9 @@
           ], byMonth, [t('common.total'), F.num(tot.count), F.num(tot.newCount), F.money(tot.premium), F.money(tot.commission), F.pct(tot.premium ? tot.commission / tot.premium : null), F.money(tot.card), F.money(tot.cash), F.money(tot.account)]);
         }
       });
-      var nbSeries = [{ label: t('common.newBusiness'), color: 'var(--chart-1)' }, { label: t('common.renewal'), color: 'var(--chart-2)' }, { label: t('form.unspecified'), color: 'var(--chart-3)' }];
-      var newRen = Charts.card({
-        id: 'rep-newren', title: t('reports.newRen'), sub: t('reports.newRenSub'),
-        legend: h('div', { class: 'legend', style: { marginBottom: '8px' } }, nbSeries.map(function (s) { return h('span', null, h('i', { style: { background: s.color } }), s.label); })),
-        chart: function () {
-          return Charts.stackedColumns({ data: byMonth.map(function (r) { return { label: F.month(r.key), short: F.month(r.key, true), values: [r.newCount, r.renewalCount, r.count - r.newCount - r.renewalCount] }; }), series: nbSeries, format: function (v) { return F.num(v); }, tickFormat: function (v) { return F.num(v); } });
-        },
-        table: function () {
-          return Charts.miniTable([
-            { label: t('common.month'), value: function (r) { return F.month(r.key); } },
-            { label: t('common.newBusiness'), align: 'r', value: function (r) { return F.num(r.newCount); } },
-            { label: t('common.renewal'), align: 'r', value: function (r) { return F.num(r.renewalCount); } },
-            { label: t('form.unspecified'), align: 'r', value: function (r) { return F.num(r.count - r.newCount - r.renewalCount); } },
-            { label: t('report.newShare'), align: 'r', value: function (r) { return F.pct(r.count ? r.newCount / r.count : null, 0); } }
-          ], byMonth);
-        }
-      });
+      var allRows = filtered(vs, true);
+      var newRen = App.kindsCard({ id: 'rep-newren', rows: allRows, months: Array.from(new Set(allRows.map(function (p) { return p.month; }))).sort(),
+        state: App.viewState.repKinds || (App.viewState.repKinds = {}), height: 280 });
       var comps = Portfolio.aggregate(list, function (p) { return p.company ? U.companyKey(p.company) : ''; });
       var compLabel = function (r) { return r.key === '—' ? t('common.unknown') : (d.companyNames.get(r.key) || r.key); };
       var companyCard = Charts.card({ id: 'rep-card-company', title: t('dash.byCompany'),
@@ -294,8 +290,12 @@
           { label: t('field.account'), align: 'r', value: function (r) { return F.money(r.account); } },
           { label: t('field.cash'), align: 'r', value: function (r) { return F.money(r.cash); } },
           { label: t('reports.colRefund'), align: 'r', value: function (r) { return h('strong', null, F.money(r.refund)); } },
-          { label: t('reports.colNetProd'), align: 'r', value: function (r) { return F.money(r.net); } }
-        ], cancelRows) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('cancel.empty'))));
+          { label: t('reports.colReclaim'), align: 'r', value: function (r) { return F.money(r.reclaim); } },
+          { label: t('reports.colNetProd'), align: 'r', value: function (r) { return F.money(r.net); } },
+          { label: t('reports.colNetComm'), align: 'r', value: function (r) { return F.money(r.netCommission); } }
+        ], cancelRows, [t('common.total'), F.num(U.sum(cancelRows, function (r) { return r.n; })), F.money(U.sum(cancelRows, function (r) { return r.card; })),
+          F.money(U.sum(cancelRows, function (r) { return r.account; })), F.money(U.sum(cancelRows, function (r) { return r.cash; })),
+          F.money(U.sum(cancelRows, function (r) { return r.refund; })), F.money(U.sum(cancelRows, function (r) { return r.reclaim; })), '', '']) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('cancel.empty'))));
 
       var summary = h('section', { class: 'card kpis k5' },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPolicies')), h('div', { class: 'kpi-value', id: 'rep-count' }, F.num(tot.count))),
@@ -303,8 +303,8 @@
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCommission')), h('div', { class: 'kpi-value', id: 'rep-commission', title: F.money(tot.commission) }, F.money0(tot.commission))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('report.commRate')), h('div', { class: 'kpi-value' }, F.pct(tot.premium ? tot.commission / tot.premium : null))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCustomers')), h('div', { class: 'kpi-value' }, F.num(tot.customerCount))));
-      var node = h('div', { class: 'stack' }, filters, summary, monthly, h('div', { class: 'grid-2' }, newRen, payCard), h('div', { class: 'grid-2' }, companyCard, catCard),
-        h('div', { class: 'grid-2' }, profCard, topCard), retCard, cancelCard, oppCard);
+      var node = h('div', { class: 'stack' }, filters, summary, monthly, newRen, h('div', { class: 'grid-2' }, companyCard, catCard),
+        h('div', { class: 'grid-2' }, payCard, profCard), topCard, retCard, cancelCard, oppCard);
       if (App.viewState.reportsFocus) {
         var focus = App.viewState.reportsFocus;
         App.viewState.reportsFocus = null;
@@ -313,6 +313,15 @@
       return node;
     }
   };
+
+  // what YENİ İŞ says, per month of the report and in total
+  function kindRows(vs) {
+    var rows = filtered(vs, true);
+    var data = App.kindCounts(rows, Array.from(new Set(rows.map(function (p) { return p.month; }))).sort());
+    var total = { key: 'total', total: U.sum(data, function (r) { return r.total; }), counts: {} };
+    App.KINDS.forEach(function (k) { total.counts[k.key] = U.sum(data, function (r) { return r.counts[k.key]; }); });
+    return data.concat([total]);
+  }
 
   function exportReport(vs, list) {
     var d = Store.derived();
@@ -343,17 +352,24 @@
         { label: t('cancel.h.company'), value: function (x) { return x.company || ''; } },
         { label: t('cancel.h.policy'), value: function (x) { return x.policyText || ''; } },
         { label: t('cancel.h.insured'), value: function (x) { return x.insuredName || ''; } },
+        { label: t('cancels.colWhere'), value: function (x) { return x.kind === 'row' ? t('cancels.whereRow', { row: (x.source && x.source.row) || '—' }) : t('cancels.whereBlock'); } },
+        { label: t('field.policyNo'), value: function (x) { return x.policyNo || ''; } },
         { label: t('field.card'), type: 'money', value: function (x) { return x.card; } },
         { label: t('field.account'), type: 'money', value: function (x) { return x.account; } },
         { label: t('field.cash'), type: 'money', value: function (x) { return x.cash; } },
+        { label: t('reports.colRefund'), type: 'money', value: Store.refundOf },
+        { label: t('reports.colReclaim'), type: 'money', value: Store.reclaimOf },
         { label: t('cancel.colMatch'), value: function (x) {
           var p = x.policyId && Store.policies.get(x.policyId);
           if (!p) return '';
           var c = Store.customers.get(p.customerId);
           return [c && c.name, p.policyType, U.monthLabel(p.month, lang()), p.policyNo].filter(Boolean).join(' · ');
         } },
-        { label: t('cancel.colStatus'), value: function (x) { var p = x.policyId && Store.policies.get(x.policyId); return p ? t(x.match === 'auto' ? 'cancel.m.auto' : 'cancel.m.manual') : t(x.match === 'ambiguous' ? 'cancel.m.ambiguous' : x.locked ? 'cancel.m.notInFile' : 'cancel.m.none', { n: (x.candidates || []).length }); } }
-      ], rows: filteredCancels(vs) }
+        { label: t('cancel.colStatus'), value: App.cancelStatusText }
+      ], rows: filteredCancels(vs) },
+      { name: t('kinds.sheet'), columns: [{ label: t('common.month'), value: function (r) { return r.key === 'total' ? t('common.total') : U.monthLabel(r.key, lang()); } }]
+        .concat(App.KINDS.map(function (k) { return { label: t('kind.' + k.key), type: 'int', value: function (r) { return r.counts[k.key]; } }; }))
+        .concat([{ label: t('kinds.total'), type: 'int', value: function (r) { return r.total; } }]), rows: kindRows(vs) }
     ]);
     save(wb, 'rapor-' + stamp() + '.xlsx');
   }

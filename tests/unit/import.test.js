@@ -90,7 +90,7 @@ test('sample workbook: every sheet gets the right month, header row and row coun
   for (const s of a.sheets) {
     assert.equal(s.month.key, expected.sheetMonths[s.name], s.name);
     assert.equal(s.include, true, s.name);
-    assert.equal(s.rows.length, expected.months[s.month.key].count, 'rows in ' + s.name);
+    assert.equal(s.rows.length, expected.months[s.month.key].rows, 'rows in ' + s.name);
   }
   const kasim = a.sheets.find(s => s.name === 'KASIM 2025');
   assert.equal(kasim.headerRow, 3, 'header below the title rows');
@@ -107,9 +107,13 @@ test('sample workbook: every sheet gets the right month, header row and row coun
 test('sample workbook: totals per month, customers and identities match the ground truth', () => {
   const state = { customers: new Map(), policies: new Map() };
   const res = importInto(state, analyse(sampleBytes, 'ornek-portfoy.xlsx'), 'ornek-portfoy.xlsx');
-  assert.equal(state.policies.size, expected.totalPolicies);
+  assert.equal(state.policies.size, expected.totalRows);
   assert.equal(state.customers.size, expected.totalCustomers);
-  const rows = P.aggregate(Array.from(state.policies.values()), p => p.month, true);
+  // rows that cancel an earlier row are no policies of their own
+  const reps = P.findRepeats(Array.from(state.policies.values()), state.customers);
+  const policies = Array.from(state.policies.values()).filter(p => P.repeatEffect(p, reps.get(p.id)) !== 'cancel');
+  assert.equal(policies.length, expected.totalPolicies);
+  const rows = P.aggregate(policies, p => p.month, true);
   for (const r of rows) {
     const e = expected.months[r.key];
     assert.equal(r.count, e.count, r.key + ' count');
@@ -132,8 +136,7 @@ test('sample workbook: totals per month, customers and identities match the grou
   assert.deepEqual([...new Set(sp.map(p => p.month))].sort(), expected.showcase.months);
   assert.equal(U.round2(U.sum(sp, p => p.premium)), expected.showcase.premium);
   assert.equal(res.issues.filter(i => i.type === 'badId').length, expected.brokenTcRows);
-  const all = Array.from(state.policies.values());
-  const multi = customers.filter(c => new Set(all.filter(p => p.customerId === c.id).map(p => p.month)).size > 1);
+  const multi = customers.filter(c => new Set(policies.filter(p => p.customerId === c.id).map(p => p.month)).size > 1);
   assert.equal(multi.length, expected.multiMonthCustomers);
   // every customer keeps the valid TC even when one row had a typo
   assert.ok(customers.every(c => !c.tc || U.idKind(c.tc) !== 'invalid'), 'no invalid TC left on a customer');
@@ -145,9 +148,12 @@ test('sample workbook: importing the same file again changes nothing', () => {
   const second = importInto(state, analyse(sampleBytes, 'ornek-portfoy.xlsx'), 'a.xlsx');
   assert.equal(second.added.length, 0);
   assert.equal(second.updated.length, 0);
-  assert.equal(second.unchanged, expected.totalPolicies);
+  assert.equal(second.unchanged, expected.totalRows);
   assert.equal(second.customersAdded.length, 0);
-  assert.equal(state.policies.size, expected.totalPolicies);
+  assert.equal(state.policies.size, expected.totalRows);
+  // the cancelling row lower on the same page keeps its own minus amount
+  const pair = Array.from(state.policies.values()).filter(p => p.policyNo === expected.repeats.list.find(r => r.role === 'cancel' && r.month === r.ofMonth).policyNo);
+  assert.deepEqual(pair.map(p => p.premium > 0).sort(), [false, true]);
 });
 
 test('sample workbook: renewals and retention', () => {

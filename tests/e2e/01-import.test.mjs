@@ -40,7 +40,7 @@ test('sample file preview: 13 sheets, each with the right month and row count', 
     assert.ok(key, 'known sheet ' + r.name);
     const [y, m] = key.split('-');
     assert.equal(r.month, Number(m) + '-' + y, 'month of ' + r.name);
-    assert.equal(r.rows, expected.months[key].count, 'rows of ' + r.name);
+    assert.equal(r.rows, expected.months[key].rows, 'rows of ' + r.name);
     assert.equal(r.included, true);
   }
   // MART has no year in its name: the year comes from the dates
@@ -79,7 +79,7 @@ test('import adds every policy and customer, lists the TC typos and the İptal r
   await page.click('#import-run');
   await page.waitForSelector('#import-done');
   const n = async (id) => Number((await text(page, id + ' .v')).replace(/\D/g, ''));
-  assert.equal(await n('#res-added'), expected.totalPolicies);
+  assert.equal(await n('#res-added'), expected.totalRows);
   assert.equal(await n('#res-customers'), expected.totalCustomers);
   assert.equal(await n('#res-updated'), 0);
   const cx = expected.cancellations;
@@ -90,7 +90,7 @@ test('import adds every policy and customer, lists the TC typos and the İptal r
   assert.match(await text(page, '#import-issues'), /İptal: birden fazla poliçe/);
   assert.match(await text(page, '#import-issues'), /İptal: poliçe bulunamadı/);
   const counts = await store(page, () => [Store.customers.size, Store.policies.size, DB.kind]);
-  assert.deepEqual(counts, [expected.totalCustomers, expected.totalPolicies, 'indexeddb']);
+  assert.deepEqual(counts, [expected.totalCustomers, expected.totalRows, 'indexeddb']);
 });
 
 test('importing the same file again adds nothing', async () => {
@@ -102,9 +102,9 @@ test('importing the same file again adds nothing', async () => {
   await page.waitForSelector('#import-done');
   const n = async (id) => Number((await text(page, id + ' .v')).replace(/\D/g, ''));
   assert.equal(await n('#res-added'), 0);
-  assert.equal(await n('#res-unchanged'), expected.totalPolicies);
+  assert.equal(await n('#res-unchanged'), expected.totalRows);
   assert.equal(await n('#res-customers'), 0);
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies);
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows);
 });
 
 test('CSV file chosen with the file picker: month from the file name, then undo from history', async () => {
@@ -125,7 +125,7 @@ test('CSV file chosen with the file picker: month from the file name, then undo 
   // undo the CSV import from the history list
   await page.click('#import-history .list-item:first-child button');
   await confirmDialog(page);
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies);
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows);
   assert.equal(await store(page, () => Array.from(Store.customers.values()).some(x => x.tc === '10000000146')), false);
 });
 
@@ -146,7 +146,7 @@ test('a sheet without a month blocks the import until a month is chosen; dropped
   assert.ok(await page.isVisible('#missing-month'));
   await page.click('#import-run');
   await page.waitForSelector('.toast.bad');
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies, 'nothing imported yet');
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows, 'nothing imported yet');
   await page.selectOption('#sheet-month-0', '9');
   await page.selectOption('#sheet-month-0-y', '2026');
   await page.waitForSelector('#missing-month', { state: 'detached' });

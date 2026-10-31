@@ -59,7 +59,7 @@
       case 'phone': return c && c.phone ? U.formatPhone(c.phone) : (p.row && p.row.phone ? U.formatPhone(p.row.phone) : '');
       case 'profession': return c ? c.profession : (p.row && p.row.profession) || '';
       case 'email': case 'address': case 'birthDate': return c ? c[field] : '';
-      case 'newBusiness': return p.newBusiness === true ? 'Evet' : p.newBusiness === false ? 'Hayır' : '';
+      case 'newBusiness': return p.businessText || (p.newBusiness === true ? 'Evet' : p.newBusiness === false ? 'Hayır' : '');
       default: return p[field];
     }
   }
@@ -187,16 +187,21 @@
       var others = Portfolio.phonesOf(c).filter(function (x) { return x !== c.phone; }).map(U.formatPhone).join(', ');
       return [c.name, c.tc, c.phone ? U.formatPhone(c.phone) : '', others, c.email, c.profession, c.address, c.birthDate,
         ps.length, months.map(function (m) { return U.monthLabel(m, lang, true); }).join(', '),
-        U.round2(U.sum(ps, function (p) { return p.premium; })), U.round2(U.sum(ps, function (p) { return p.commission; })),
+        U.round2(U.sum(ps, function (p) { return p.premium; })), U.round2(U.sum(ps, function (p) { return Portfolio.commissionOf(p).value; })),
         U.round2(U.sum(ps, owed)) || '', c.notes];
     });
     return makeSheet(XLSX, header, rows, types);
   }
 
-  function summarySheet(XLSX, policies, lang, cancels) {
+  // a cancelling row of the table carries its own refund and commission taken back; an İptal block row is worked out
+  function refundOf(x) { return x.kind === 'row' ? x.refund || 0 : Portfolio.refundOf(x); }
+  function reclaimOf(x) { return x.kind === 'row' ? x.reclaim || 0 : Portfolio.blockReclaim(x, null); }
+
+  function summarySheet(XLSX, policies, lang, cancels, reclaimFn) {
+    var reclaim = reclaimFn || reclaimOf;
     var header = lang === 'en'
-      ? ['Month', 'Policies', 'New business', 'Premium', 'Commission', 'Commission %', 'Card', 'On account', 'Cash', 'Cancelled', 'Refunded']
-      : ['Ay', 'Poliçe sayısı', 'Yeni iş', 'Prim', 'Komisyon', 'Komisyon %', 'Kart', 'Cari', 'Nakit', 'İptal', 'İade'];
+      ? ['Month', 'Policies', 'New business', 'Premium', 'Commission', 'Commission %', 'Card', 'On account', 'Cash', 'Cancelled', 'Refunded', 'Commission taken back', 'Net commission']
+      : ['Ay', 'Poliçe sayısı', 'Yeni iş', 'Prim', 'Komisyon', 'Komisyon %', 'Kart', 'Cari', 'Nakit', 'İptal', 'İade', 'Geri alınan komisyon', 'Net komisyon'];
     var byMonth = U.groupBy(cancels || [], function (x) { return x.month; });
     var agg = Portfolio.aggregate(policies, function (p) { return p.month; }, true);
     var keys = new Set(agg.map(function (r) { return r.key; }));
@@ -204,28 +209,35 @@
     agg.sort(function (a, b) { return U.cmp(a.key, b.key); });
     var rows = agg.map(function (r) {
       var xs = byMonth.get(r.key) || [];
-      return [U.monthLabel(r.key, lang), r.count, r.newCount, r.premium, r.commission, r.premium ? r.commission / r.premium : '', r.card, r.account, r.cash, xs.length, U.round2(U.sum(xs, Portfolio.refundOf))];
+      var back = U.round2(U.sum(xs, reclaim));
+      return [U.monthLabel(r.key, lang), r.count, r.newCount, r.premium, r.commission, r.premium ? r.commission / r.premium : '', r.card, r.account, r.cash, xs.length, U.round2(U.sum(xs, refundOf)),
+        back, U.round2(r.commission - back)];
     });
     var t = Portfolio.totals(policies);
     var all = cancels || [];
-    rows.push([lang === 'en' ? 'Total' : 'Toplam', t.count, t.newCount, t.premium, t.commission, t.premium ? t.commission / t.premium : '', t.card, t.account, t.cash, all.length, U.round2(U.sum(all, Portfolio.refundOf))]);
-    return makeSheet(XLSX, header, rows, ['text', 'int', 'int', 'money', 'money', 'pct', 'money', 'money', 'money', 'int', 'money']);
+    var backAll = U.round2(U.sum(all, reclaim));
+    rows.push([lang === 'en' ? 'Total' : 'Toplam', t.count, t.newCount, t.premium, t.commission, t.premium ? t.commission / t.premium : '', t.card, t.account, t.cash, all.length, U.round2(U.sum(all, refundOf)),
+      backAll, U.round2(t.commission - backAll)]);
+    return makeSheet(XLSX, header, rows, ['text', 'int', 'int', 'money', 'money', 'pct', 'money', 'money', 'money', 'int', 'money', 'money', 'money']);
   }
 
   /**
-   * opts: { XLSX, policies (array), customers (Map), monthsMeta, lang, months (keys to include, optional),
-   *         cancels (İptal rows, array), outstanding (policy -> open balance), withCustomers, withSummary }
+   * opts: { XLSX, policies (array), rows (every row of the month pages, the cancelling ones too; default policies),
+   *         customers (Map), monthsMeta, lang, months (keys to include, optional), cancels (İptal block rows and
+   *         cancelling rows, array), reclaimOf (cancellation -> commission taken back), outstanding (policy -> open balance),
+   *         withCustomers, withSummary }
    */
   function portfolioWorkbook(opts) {
     var XLSX = opts.XLSX;
     var wb = XLSX.utils.book_new();
     var used = new Set();
-    var byMonth = U.groupBy(opts.policies, function (p) { return p.month; });
+    var byMonth = U.groupBy(opts.rows || opts.policies, function (p) { return p.month; });
     var cancels = (opts.cancels || []).filter(function (x) { return !opts.months || opts.months.indexOf(x.month) >= 0; });
-    var cancelsByMonth = U.groupBy(cancels, function (x) { return x.month; });
+    // a cancelling row is already a row of its month's table: only the İptal block goes into the block
+    var cancelsByMonth = U.groupBy(cancels.filter(function (x) { return x.kind !== 'row'; }), function (x) { return x.month; });
     var all = new Set(Array.from(byMonth.keys()).concat(Array.from(cancelsByMonth.keys())));
     var keys = (opts.months || Array.from(all)).filter(function (k) { return all.has(k); }).sort();
-    if (opts.withSummary) XLSX.utils.book_append_sheet(wb, summarySheet(XLSX, opts.policies, opts.lang, cancels), safeSheetName(opts.lang === 'en' ? 'Summary' : 'Özet', used));
+    if (opts.withSummary) XLSX.utils.book_append_sheet(wb, summarySheet(XLSX, opts.policies, opts.lang, cancels, opts.reclaimOf), safeSheetName(opts.lang === 'en' ? 'Summary' : 'Özet', used));
     keys.forEach(function (k) {
       var ws = monthSheet(XLSX, byMonth.get(k) || [], opts.customers, opts.monthsMeta && opts.monthsMeta[k], cancelsByMonth.get(k));
       XLSX.utils.book_append_sheet(wb, ws, safeSheetName(U.monthLabel(k, 'tr'), used));
@@ -253,6 +265,6 @@
   return {
     portfolioWorkbook: portfolioWorkbook, monthSheet: monthSheet, monthColumns: monthColumns, customersSheet: customersSheet,
     summarySheet: summarySheet, tableWorkbook: tableWorkbook, makeSheet: makeSheet, writeFile: writeFile, valueFor: valueFor,
-    BLOCK_KINDS: BLOCK_KINDS, BLOCK_HEADERS: BLOCK_HEADERS, blockLayout: blockLayout, cancelValue: cancelValue
+    BLOCK_KINDS: BLOCK_KINDS, BLOCK_HEADERS: BLOCK_HEADERS, blockLayout: blockLayout, cancelValue: cancelValue, refundOf: refundOf, reclaimOf: reclaimOf
   };
 });

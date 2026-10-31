@@ -18,130 +18,252 @@
   },
   "months": {
     "2025-10": {
+      "rows": 55,
       "count": 55,
       "premium": 1032277.0,
-      "commission": 131396.76,
-      "newBusiness": 29,
+      "commission": 131209.46,
+      "newBusiness": 27,
       "card": 681191.76,
       "account": 125102.75,
-      "cash": 225982.49
+      "cash": 225982.49,
+      "kinds": {
+        "new": 27,
+        "renewal": 26,
+        "cancel": 0,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 2
+      }
     },
     "2025-11": {
+      "rows": 46,
       "count": 46,
       "premium": 523673.25,
       "commission": 67183.23,
-      "newBusiness": 17,
+      "newBusiness": 16,
       "card": 422590.4,
       "account": 38800.75,
-      "cash": 62282.1
+      "cash": 62282.1,
+      "kinds": {
+        "new": 16,
+        "renewal": 29,
+        "cancel": 0,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 1
+      }
     },
     "2025-12": {
+      "rows": 51,
       "count": 51,
       "premium": 1305682.25,
-      "commission": 169211.71,
+      "commission": 169240.16,
       "newBusiness": 28,
       "card": 732796.31,
       "account": 330652.5,
-      "cash": 242233.44
+      "cash": 242233.44,
+      "kinds": {
+        "new": 28,
+        "renewal": 0,
+        "cancel": 0,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 23
+      }
     },
     "2026-01": {
+      "rows": 34,
       "count": 33,
       "premium": 466899.25,
       "commission": 60684.21,
       "newBusiness": 12,
       "card": 176466.38,
       "account": 72720.5,
-      "cash": 217712.37
+      "cash": 217712.37,
+      "kinds": {
+        "new": 12,
+        "renewal": 21,
+        "cancel": 1,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 0
+      }
     },
     "2026-02": {
-      "count": 61,
-      "premium": 833776.5,
-      "commission": 100506.48,
-      "newBusiness": 32,
+      "rows": 62,
+      "count": 62,
+      "premium": 834576.5,
+      "commission": 101356.26,
+      "newBusiness": 29,
       "card": 550684.65,
       "account": 84981.75,
-      "cash": 198110.1
+      "cash": 198110.1,
+      "kinds": {
+        "new": 29,
+        "renewal": 29,
+        "cancel": 0,
+        "ek": 1,
+        "zeyil": 1,
+        "unknown": 2
+      }
     },
     "2026-03": {
+      "rows": 66,
       "count": 64,
       "premium": 1170970.75,
-      "commission": 154428.98,
+      "commission": 154380.41,
       "newBusiness": 32,
       "card": 801334.13,
       "account": 156461.75,
-      "cash": 213174.87
+      "cash": 213174.87,
+      "kinds": {
+        "new": 32,
+        "renewal": 31,
+        "cancel": 2,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 1
+      }
     },
     "2026-04": {
-      "count": 65,
-      "premium": 1316799.25,
-      "commission": 174150.27,
-      "newBusiness": 21,
+      "rows": 66,
+      "count": 66,
+      "premium": 1344171.4,
+      "commission": 181652.08,
+      "newBusiness": 20,
       "card": 941173.8,
       "account": 157752.0,
-      "cash": 217873.45
+      "cash": 217873.45,
+      "kinds": {
+        "new": 20,
+        "renewal": 43,
+        "cancel": 0,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 3
+      }
     },
     "2026-05": {
+      "rows": 63,
       "count": 62,
       "premium": 1196739.25,
-      "commission": 168912.08,
+      "commission": 168759.92,
       "newBusiness": 28,
       "card": 836690.0,
       "account": 77122.25,
-      "cash": 282927.0
+      "cash": 282927.0,
+      "kinds": {
+        "new": 28,
+        "renewal": 34,
+        "cancel": 1,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 0
+      }
     },
     "2026-06": {
-      "count": 46,
-      "premium": 770213.75,
-      "commission": 99229.43,
+      "rows": 48,
+      "count": 47,
+      "premium": 772303.75,
+      "commission": 99824.25,
       "newBusiness": 24,
       "card": 524623.8,
       "account": 60971.0,
-      "cash": 184618.95
+      "cash": 184618.95,
+      "kinds": {
+        "new": 24,
+        "renewal": 22,
+        "cancel": 1,
+        "ek": 1,
+        "zeyil": 0,
+        "unknown": 0
+      }
     },
     "2026-07": {
+      "rows": 52,
       "count": 51,
       "premium": 993503.5,
       "commission": 132610.44,
-      "newBusiness": 25,
+      "newBusiness": 24,
       "card": 455923.49,
       "account": 88091.0,
-      "cash": 449489.01
+      "cash": 449489.01,
+      "kinds": {
+        "new": 24,
+        "renewal": 26,
+        "cancel": 0,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 2
+      }
     },
     "2026-08": {
+      "rows": 56,
       "count": 55,
       "premium": 959996.5,
-      "commission": 132704.85,
+      "commission": 133006.12,
       "newBusiness": 24,
       "card": 722464.48,
       "account": 111734.0,
-      "cash": 125798.02
+      "cash": 125798.02,
+      "kinds": {
+        "new": 24,
+        "renewal": 0,
+        "cancel": 1,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 31
+      }
     },
     "2026-09": {
-      "count": 43,
-      "premium": 705093.75,
-      "commission": 92570.5,
+      "rows": 45,
+      "count": 44,
+      "premium": 706323.75,
+      "commission": 92770.49,
       "newBusiness": 21,
       "card": 298417.98,
       "account": 240482.0,
-      "cash": 166193.77
+      "cash": 166193.77,
+      "kinds": {
+        "new": 21,
+        "renewal": 0,
+        "cancel": 1,
+        "ek": 1,
+        "zeyil": 1,
+        "unknown": 21
+      }
     },
     "2026-10": {
-      "count": 73,
-      "premium": 1680819.2,
-      "commission": 228722.78,
+      "rows": 74,
+      "count": 74,
+      "premium": 1692415.4,
+      "commission": 230342.66,
       "newBusiness": 14,
       "card": 1110372.57,
       "account": 251999.37,
-      "cash": 318447.26
+      "cash": 318447.26,
+      "kinds": {
+        "new": 14,
+        "renewal": 57,
+        "cancel": 0,
+        "ek": 0,
+        "zeyil": 0,
+        "unknown": 3
+      }
     }
   },
-  "totalPolicies": 705,
+  "totalRows": 718,
+  "totalPolicies": 710,
   "totalCustomers": 321,
-  "multiMonthCustomers": 168,
-  "totalPremium": 12956444.2,
-  "totalCommission": 1712311.72,
+  "multiMonthCustomers": 169,
+  "totalPremium": 12999532.55,
+  "totalCommission": 1723019.69,
+  "estimatedCommission": {
+    "count": 15,
+    "total": 25314.0
+  },
   "totalAccount": 1796871.62,
-  "newBusiness": 307,
+  "newBusiness": 299,
   "renewalsInFile": 26,
   "homonyms": [
     "Mehmet Yılmaz",
@@ -361,14 +483,168 @@
       }
     ]
   },
-  "totalOutstanding": 1788788.61,
+  "totalOutstanding": 1742782.01,
+  "repeats": {
+    "cancel": 7,
+    "orphan": 1,
+    "ask": 2,
+    "endorse": 3,
+    "refundTotal": 86867.53,
+    "reclaimTotal": 10990.67,
+    "list": [
+      {
+        "month": "2026-01",
+        "policyNo": "QS-20250130118",
+        "role": "cancel",
+        "of": "QS-20250130118",
+        "ofMonth": "2025-12",
+        "text": "İPTAL",
+        "premium": -873.23,
+        "commission": -147.91,
+        "name": "Can Polat"
+      },
+      {
+        "month": "2026-03",
+        "policyNo": "AN-20250114715",
+        "role": "cancel",
+        "of": "AN-20250114715",
+        "ofMonth": "2026-02",
+        "text": "İPTAL",
+        "premium": -13704.4,
+        "commission": -1129.34,
+        "name": "Murat Arslan"
+      },
+      {
+        "month": "2026-06",
+        "policyNo": "TS-20260129248",
+        "role": "cancel",
+        "of": "TS-20260129248",
+        "ofMonth": "2026-03",
+        "text": "İPTAL",
+        "premium": -594.3,
+        "commission": -135.89,
+        "name": "Ayşe Korkmaz"
+      },
+      {
+        "month": "2026-08",
+        "policyNo": "AZ-20250110847",
+        "role": "cancel",
+        "of": "AZ-20250110847",
+        "ofMonth": "2026-07",
+        "text": "iptal",
+        "premium": -5220.45,
+        "commission": -431.44,
+        "name": "Burak Işık"
+      },
+      {
+        "month": "2026-09",
+        "policyNo": "AK-20260107629",
+        "role": "cancel",
+        "of": "AK-20260107629",
+        "ofMonth": "2026-02",
+        "text": "İPTAL",
+        "premium": -22539.0,
+        "commission": -3489.72,
+        "name": "Murat Akın"
+      },
+      {
+        "month": "2026-07",
+        "policyNo": "AX-20250113061",
+        "role": "cancel",
+        "of": "AX-20250113061",
+        "ofMonth": "2026-06",
+        "text": "",
+        "premium": -15880.0,
+        "commission": -2364.54,
+        "name": "Eren Güler"
+      },
+      {
+        "month": "2026-05",
+        "policyNo": "HD-20250106399",
+        "role": "cancel",
+        "of": "HD-20250106399",
+        "ofMonth": "2026-05",
+        "text": "İPTAL",
+        "premium": -24906.15,
+        "commission": -2819.33,
+        "name": "Çağlar Kılıç"
+      },
+      {
+        "month": "2026-04",
+        "policyNo": "HD-20250128701",
+        "role": "ask",
+        "of": "HD-20250128701",
+        "ofMonth": "2026-03",
+        "text": "",
+        "premium": 27372.15,
+        "commission": 4867.06,
+        "name": "Çınar Dental Kliniği"
+      },
+      {
+        "month": "2026-10",
+        "policyNo": "AS-20260118150",
+        "role": "ask",
+        "of": "AS-20260118150",
+        "ofMonth": "2026-04",
+        "text": "YENİLEME",
+        "premium": 11596.2,
+        "commission": null,
+        "name": "Melek Demir"
+      },
+      {
+        "month": "2026-02",
+        "policyNo": "TS-20260121470",
+        "role": "endorse",
+        "of": "TS-20260121470",
+        "ofMonth": "2025-12",
+        "text": "ZEYİL",
+        "premium": 800,
+        "commission": 120.0,
+        "name": "Osman Taş"
+      },
+      {
+        "month": "2026-09",
+        "policyNo": "AX-20250105514",
+        "role": "endorse",
+        "of": "AX-20250105514",
+        "ofMonth": "2026-05",
+        "text": "Zeyil",
+        "premium": 1230,
+        "commission": 184.5,
+        "name": "Şahin Coşkun"
+      },
+      {
+        "month": "2026-06",
+        "policyNo": "DG-20250121044",
+        "role": "endorse",
+        "of": "DG-20250121044",
+        "ofMonth": "2026-03",
+        "text": "İMM EK",
+        "premium": 2090,
+        "commission": 313.5,
+        "name": "Selin Şahin"
+      },
+      {
+        "month": "2026-03",
+        "policyNo": "AS-2024124791",
+        "role": "orphan",
+        "of": null,
+        "ofMonth": null,
+        "text": "İPTAL",
+        "premium": -3150.0,
+        "commission": -472.5,
+        "name": "İsmail Doğan"
+      }
+    ]
+  },
+  "blockReclaimTotal": 36243.34,
   "byKind": {
     "trafik": 241,
-    "kasko": 111,
-    "imm": 18,
+    "kasko": 113,
+    "imm": 19,
     "dask": 116,
-    "konut": 51,
-    "tss": 69,
+    "konut": 52,
+    "tss": 70,
     "saglik": 10,
     "ferdi": 37,
     "seyahat": 30,
@@ -377,18 +653,18 @@
   },
   "byInsurer": {
     "Allianz": 93,
-    "Axa": 84,
+    "Axa": 85,
     "Anadolu": 85,
     "Mapfre": 66,
-    "HDI": 46,
+    "HDI": 47,
     "Sompo": 53,
-    "Türkiye": 62,
+    "Türkiye": 63,
     "Ray": 30,
     "Quick": 25,
     "Neova": 27,
-    "Doğa": 33,
+    "Doğa": 34,
     "Ankara": 23,
-    "Aksigorta": 44,
+    "Aksigorta": 45,
     "Unico": 17,
     "Bereket": 17
   }

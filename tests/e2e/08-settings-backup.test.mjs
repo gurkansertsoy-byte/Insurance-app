@@ -79,7 +79,7 @@ test('backup file contains everything', async () => {
   const data = JSON.parse(file.bytes.toString('utf8'));
   assert.equal(data.app, 'sigorta-portfoy');
   assert.equal(data.customers.length, expected.totalCustomers);
-  assert.equal(data.policies.length, expected.totalPolicies);
+  assert.equal(data.policies.length, expected.totalRows);
   assert.equal(Object.keys(data.months).length, 13);
   backupPath = path.join(OUT, file.name);
   fs.writeFileSync(backupPath, file.bytes);
@@ -95,7 +95,7 @@ test('whole portfolio to Excel: summary, 13 months and customers', async () => {
   assert.equal(wb.SheetNames[14], 'Müşteriler');
   const summary = sheetRows(wb, 'Özet');
   assert.equal(summary[summary.length - 1][1], expected.totalPolicies);
-  assert.equal(sheetRows(wb, 'Ekim 2026').length - 1, expected.months['2026-10'].count);
+  assert.equal(sheetRows(wb, 'Ekim 2026').length - 1, expected.months['2026-10'].rows);
 });
 
 test('delete everything (typed confirmation), then restore the backup', async () => {
@@ -110,7 +110,7 @@ test('delete everything (typed confirmation), then restore the backup', async ()
   assert.match(await text(page, 'dialog[open]'), new RegExp(expected.totalCustomers + ' müşteri'));
   await confirmDialog(page);
   await waitHash(page, '#panel');
-  assert.deepEqual(await store(page, () => [Store.customers.size, Store.policies.size, Object.keys(Store.months).length]), [expected.totalCustomers, expected.totalPolicies, 13]);
+  assert.deepEqual(await store(page, () => [Store.customers.size, Store.policies.size, Object.keys(Store.months).length]), [expected.totalCustomers, expected.totalRows, 13]);
   // a file that is not a backup is refused
   const bad = path.join(OUT, 'not-a-backup.json');
   fs.writeFileSync(bad, '{"hello": 1}');
@@ -123,7 +123,7 @@ test('everything survives a page reload', async () => {
   const { page } = env;
   await page.reload();
   await page.waitForFunction(() => window.Store && Store.loaded);
-  assert.deepEqual(await store(page, () => [Store.customers.size, Store.policies.size, Store.settings.agencyName]), [expected.totalCustomers, expected.totalPolicies, 'Yıldız Sigorta Aracılık']);
+  assert.deepEqual(await store(page, () => [Store.customers.size, Store.policies.size, Store.settings.agencyName]), [expected.totalCustomers, expected.totalRows, 'Yıldız Sigorta Aracılık']);
   await go(page, 'ayarlar');
   assert.match(await text(page, '#storage-counts'), new RegExp(expected.totalCustomers + ' müşteri'));
   assert.match(await text(page, '#settings-storage'), /Tarayıcı veritabanı/);

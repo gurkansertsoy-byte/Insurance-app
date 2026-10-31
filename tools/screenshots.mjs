@@ -432,7 +432,48 @@ async function excel() {
   } finally { await env.close(); }
 }
 
+/** A policy number written again: the İptaller page, its questions, the YENİ İŞ chart, a minus row on its page. */
+async function repeats() {
+  console.log('repeats and YENİ İŞ');
+  const env = await setup({ viewport: { width: 1440, height: 900 } });
+  const { page, base } = env;
+  try {
+    await page.addInitScript(() => { try { localStorage.setItem('sp:handle-off', '1'); } catch (e) {} });
+    await loadDemo(page, base);
+    await go(page, 'iptaller');
+    await waitHash(page, '#iptaller');
+    await snap(page, '41-cancels-page');
+    await page.locator('#cancel-questions').screenshot({ path: path.join(DIR, '42-repeat-questions.png') });
+    console.log('  42-repeat-questions.png');
+    await go(page, 'panel');
+    await waitHash(page, '#panel');
+    for (const [view, name] of [['bars', '43-kinds-bars'], ['lines', '44-kinds-lines'], ['split', '45-kinds-split']]) {
+      await page.click('#chart-kinds-' + view);
+      await page.mouse.move(1, 1);
+      await page.waitForTimeout(300);
+      await page.locator('#chart-kinds').screenshot({ path: path.join(DIR, name + '.png') });
+      console.log('  ' + name + '.png');
+    }
+    await page.click('#chart-kinds-bars');
+    // the row that cancels, on its month page: minus amounts, marked
+    await go(page, 'ay-2026-09');
+    await waitHash(page, '#ay-2026-09');
+    await page.evaluate(() => {
+      const tr = document.querySelector('table.sheet tr.row-cancel-entry');
+      window.scrollTo(0, tr.getBoundingClientRect().top + window.scrollY - 330);
+      // sideways to the amounts, so the minus Poliçe tutarı and Komisyon are in the picture
+      const wrap = tr.closest('.table-wrap');
+      const ths = Array.from(document.querySelectorAll('table.sheet thead th'));
+      const th = ths.find(x => /tutar/i.test(x.textContent)) || ths[ths.length - 1];
+      if (wrap && th) wrap.scrollLeft = Math.max(0, th.offsetLeft - 700);
+    });
+    await snap(page, '46-month-minus-row');
+    if (env.errors.length) throw new Error(env.errors.join('\n'));
+  } finally { await env.close(); }
+}
+
 const only = process.argv[2];
+if (!only || only === 'repeats') await repeats();
 if (!only || only === 'desktop') await desktop();
 if (!only || only === 'dark') await dark();
 if (!only || only === 'phone') await phone();

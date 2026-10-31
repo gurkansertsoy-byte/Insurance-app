@@ -54,6 +54,9 @@
   --chart-1: #2a78d6;
   --chart-2: #eb6834;
   --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-unknown: #7b8784;
   --chart-grid: #e4e9e7;
   --chart-axis: #c3ccc9;
   --chart-muted: #b9c4c1;
@@ -108,6 +111,9 @@
     --chart-1: #3987e5;
     --chart-2: #d95926;
     --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+    --chart-unknown: #7d8c89;
     --chart-grid: #22302e;
     --chart-axis: #3a4c49;
     --chart-muted: #4a5c59;
@@ -156,6 +162,9 @@
   --chart-1: #3987e5;
   --chart-2: #d95926;
   --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-unknown: #7d8c89;
   --chart-grid: #22302e;
   --chart-axis: #3a4c49;
   --chart-muted: #4a5c59;
@@ -517,6 +526,14 @@ table.data.sheet td.wrap { white-space: normal; min-width: 160px; }
 .policy-row.is-cancelled .policy-main, .policy-row.is-cancelled .policy-money, .policy-row.is-cancelled .policy-company { opacity: 0.75; }
 table.data tr.row-cancelled td { color: var(--text-3); }
 table.data tr.row-cancelled td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+/* a row that cancels another one (its policy number again, minus amounts): the refund, not a policy */
+table.data tr.row-cancel-entry td { color: var(--bad-ink); background: var(--bad-soft); }
+table.data tr.row-cancel-entry td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+/* a row the user is asked about */
+table.data tr.row-ask td { background: var(--warn-soft); }
+table.data tr.row-ask td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.est { color: var(--text-3); font-style: italic; }
+.repeat-question { align-items: center; flex-wrap: wrap; }
 .cancel-entry { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-top: 1px solid var(--border); background: var(--bad-soft); font-size: 13px; }
 .cancel-entry .svg-icon { color: var(--bad-ink); font-size: 16px; }
 .cancel-entry .amount { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -669,6 +686,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .chart .hit:focus { outline: none; }
 .chart.hovering .mark { opacity: 0.45; }
 .chart.hovering .mark.on { opacity: 1; }
+.chart .crosshair { stroke: var(--chart-axis); stroke-width: 1; }
 .chart-tip {
   position: absolute; pointer-events: none; z-index: 5; min-width: 150px;
   background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
@@ -682,6 +700,18 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--text-2); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+/* "not known": a hollow, dashed mark, told apart by its shape rather than its colour */
+.legend i.hollow { background: transparent !important; border: 1.5px dashed var(--chart-unknown); width: 9px; height: 9px; }
+.legend i.line { height: 2px; width: 14px; border-radius: 1px; }
+.legend i.line.hollow { border: 0; border-top: 2px dashed var(--chart-unknown); height: 0; }
+.chart-note { font-size: 12px; color: var(--text-3); margin-top: 8px; }
+.kinds-split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 22px; }
+.kinds-panel-head { display: flex; align-items: center; gap: 7px; font-size: 13px; margin-bottom: 2px; }
+.kinds-panel-head .muted { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+.kinds-panel-head .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.kinds-panel-head .sw.hollow { border: 1.5px dashed var(--chart-unknown); background: none; }
+@media (max-width: 1100px) { .kinds-split { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .kinds-split { grid-template-columns: minmax(0, 1fr); } }
 .hbars { display: flex; flex-direction: column; gap: 9px; }
 .hbar { display: grid; grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; }
 .hbar .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
@@ -702,6 +732,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .progress span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
 .result-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .result-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.result-grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .result-grid > div { padding: 12px 14px; border-radius: 9px; background: var(--surface-2); }
 .result-grid .k { font-size: 12px; color: var(--text-3); }
 .result-grid .v { font-size: 20px; font-weight: 600; }
@@ -760,7 +791,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
   .welcome-side { border-left: 0; border-top: 1px solid var(--border); }
   .search .kbd { display: none; }
   .search input { padding-right: 12px; }
-  .result-grid, .result-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-grid, .result-grid.three, .result-grid.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .policy-detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 680px) {
@@ -782,7 +813,7 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
   .policy-row { grid-template-columns: minmax(0, 1fr) auto; }
   .policy-row .policy-company, .policy-row .policy-end { display: none; }
   .hbar { grid-template-columns: minmax(70px, 110px) minmax(0, 1fr) auto; }
-  .result-grid, .result-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-grid, .result-grid.three, .result-grid.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* tables become cards */
   table.data.responsive thead { display: none; }
   table.data.responsive, table.data.responsive tbody, table.data.responsive tfoot { display: block; }

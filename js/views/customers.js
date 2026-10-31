@@ -29,9 +29,23 @@
   };
 
   App.newBizTag = function (v) {
+    // a policy row: what its YENİ İŞ cell says (EK, ZEYİL … as written)
+    if (v && typeof v === 'object') {
+      var k = Portfolio.kindOf(v);
+      if (k === 'ek' || k === 'zeyil' || k === 'cancel') return h('span', { class: 'tag-ren' }, v.businessText || t('kind.' + k));
+      v = v.newBusiness;
+    }
     if (v === true) return h('span', { class: 'tag-new' }, t('common.newBusiness'));
     if (v === false) return h('span', { class: 'tag-ren' }, t('common.renewal'));
     return null;
+  };
+
+  /** "₺1.234,00", or "≈ ₺1.234,00 (worked out)" when the row has no commission written. */
+  App.commissionText = function (p, short) {
+    var c = Portfolio.commissionOf(p);
+    if (!c.estimated) return p.commission != null ? (short ? t('customer.commShort', { v: F.money(c.value) }) : F.money(c.value)) : null;
+    var rate = Portfolio.commissionRate(p.policyType);
+    return h('span', { class: 'est', title: t('comm.estTitle') }, short ? t('customer.commShortEst', { v: F.money(c.value) }) : t('comm.estValue', { v: F.money(c.value), r: F.pct(rate, 0) }));
   };
 
   App.waMessage = function (p, c) {
@@ -247,7 +261,7 @@
   };
 
   // ------------------------------------------------------------------ customer 360
-  var ACT_ICON = { note: 'sticky-note', call: 'phone', meeting: 'users', whatsapp: 'message-circle', email: 'mail', policyAdded: 'file-text', policyUpdated: 'pencil', policyDeleted: 'trash-2', payment: 'hand-coins', renewalStatus: 'refresh-cw', customerAdded: 'user-plus', taskDone: 'circle-check', merged: 'git-merge', policyCancelled: 'ban' };
+  var ACT_ICON = { note: 'sticky-note', call: 'phone', meeting: 'users', whatsapp: 'message-circle', email: 'mail', policyAdded: 'file-text', policyUpdated: 'pencil', policyDeleted: 'trash-2', payment: 'hand-coins', renewalStatus: 'refresh-cw', customerAdded: 'user-plus', taskDone: 'circle-check', merged: 'git-merge', policyCancelled: 'ban', repeatCancel: 'ban', repeatNot: 'circle-check', repeatAuto: 'undo-2' };
   var NOTE_KINDS = ['note', 'call', 'meeting', 'whatsapp', 'email'];
 
   function policyDetail(p, c) {
@@ -262,14 +276,14 @@
     add(t('field.startDate'), F.date(p.startDate));
     add(t('field.endDate'), F.date(p.endDate));
     add(t('field.issueDate'), F.date(p.issueDate));
-    add(t('field.newBusiness'), p.newBusiness === true ? t('common.yes') : p.newBusiness === false ? t('common.no') + ' (' + t('common.renewal') + ')' : '');
+    add(t('field.newBusiness'), p.businessText ? p.businessText + ' · ' + t('kind.' + Portfolio.kindOf(p)) : p.newBusiness === true ? t('common.yes') : p.newBusiness === false ? t('common.no') + ' (' + t('common.renewal') + ')' : '');
     add(t('field.insuredName'), p.insuredName);
     add(t('field.plate'), p.plate ? UI.plate(p.plate) : null);
     add(t('field.serialNo'), p.serialNo ? h('span', { class: 'mono' }, p.serialNo) : null);
     add(t('field.step'), p.step);
     add(t('field.premium'), p.premium != null ? F.money(p.premium) : null);
     add(t('field.netPremium'), p.netPremium != null ? F.money(p.netPremium) : null);
-    add(t('field.commission'), p.commission != null ? F.money(p.commission) + (p.premium ? ' (' + F.pct(p.commission / p.premium) + ')' : '') : null);
+    add(t('field.commission'), p.commission != null ? F.money(p.commission) + (p.premium ? ' (' + F.pct(p.commission / p.premium) + ')' : '') : (p.premium ? App.commissionText(p) : null));
     add(t('field.card'), p.card ? F.money(p.card) : null);
     add(t('field.account'), p.account ? F.money(p.account) + (p.payments && p.payments.length ? ' · ' + t('collections.paidShort', { v: F.money(Portfolio.paidOnAccount(p)) }) : '') : null);
     add(t('field.cash'), p.cash ? F.money(p.cash) : null);
@@ -281,6 +295,15 @@
         cx.source && cx.source.type === 'import' ? h('span', { class: 'small muted' }, ' · ' + t('cancel.fromRow', { sheet: cx.source.sheet, row: cx.source.row })) : null));
       if (cx.note) add(t('common.notes'), cx.note);
     }
+    // EK / ZEYİL rows that add to this policy, or the policy this row adds to
+    var adds = Store.endorsementsOf(p.id);
+    if (adds.length) add(t('repeat.additions'), h('div', null, adds.map(function (q) {
+      return h('div', null, h('a', { href: '#ay-' + q.month }, F.month(q.month)), ' · ', q.businessText || t('kind.' + Portfolio.kindOf(q)), ' · ', F.money(q.premium || 0));
+    })));
+    var rep = Store.repeatOf(p.id);
+    var of = rep && rep.info.of && Store.policies.get(rep.info.of);
+    if (of && rep.effect === 'endorse') add(t('repeat.addsTo'), h('span', null, t('repeat.addsToText', { month: F.month(of.month), type: of.policyType || '—', no: of.policyNo || '' })));
+    if (rep && rep.effect === 'ask') add(t('repeat.asked'), h('span', null, of ? t('repeat.askedText', { month: F.month(of.month) }) : t('repeat.askedOrphan'), ' ', h('a', { href: '#iptaller' }, t('repeat.answer'))));
     if (p.renewal && p.renewal.note) add(t('renewals.note'), p.renewal.note);
     if (p.extras) Object.keys(p.extras).forEach(function (k) { add(k, p.extras[k]); });
     add(t('field.note'), p.note);
@@ -297,6 +320,12 @@
 
   /** Undo a cancellation: a row typed in the app goes away; a row of the Excel İptal block stays but no longer points here. */
   App.removeCancel = function (cx) {
+    // a cancelling row of the table: it is told it is no cancellation
+    if (cx.kind === 'row') {
+      Store.decideRepeat(cx.rowId, 'not');
+      UI.toast(t('cancel.removed'), { action: { label: t('common.undo'), fn: function () { Store.decideRepeat(cx.rowId, null); } } });
+      return;
+    }
     if (cx.source && cx.source.type === 'import') {
       Store.linkCancellation(cx.id, null);
       UI.toast(t('cancel.removed'), { action: { label: t('common.undo'), fn: function () { Store.linkCancellation(cx.id, cx.policyId); } } });
@@ -354,13 +383,13 @@
       h('div', { class: 'policy-main' },
         h('div', { class: 't' }, h('button', { type: 'button', class: 'icon-btn sm', 'aria-expanded': String(!!open), title: t('common.details'), 'aria-label': t('common.details'),
           onClick: function () { vs.expanded[p.id] = !vs.expanded[p.id]; App.refresh(); } }, icon(open ? 'chevron-up' : 'chevron-down')),
-          h('span', null, p.policyType || t('common.unknown')), App.newBizTag(p.newBusiness)),
+          h('span', null, p.policyType || t('common.unknown')), App.newBizTag(p)),
         h('div', { class: 's' }, Store.companyLabel(p.company) || '—', p.policyNo ? h('span', { class: 'mono' }, p.policyNo) : null)),
       h('div', { class: 'policy-company' }, p.plate ? h('div', { class: 'row tight' }, UI.plate(p.plate), p.step != null ? h('span', { class: 'chip', title: t('field.step') }, t('customer.stepShort', { n: p.step })) : null) : null,
         p.insuredName && U.fold(p.insuredName) !== U.fold(c.name) ? h('div', { class: 'small muted' }, t('customer.insured') + ': ' + p.insuredName) : (p.plate ? null : h('span', { class: 'muted small' }, '—'))),
       h('div', { class: 'policy-end' }, h('div', { class: 'small muted' }, t('field.endDate')), h('div', { class: 'num' }, p.endDate ? F.date(p.endDate) : '—'), App.statePill(info, p)),
       h('div', { class: 'policy-money' }, h('div', { class: 'p' }, p.premium != null ? F.money(p.premium) : '—'),
-        h('div', { class: 'c' }, p.commission != null ? t('customer.commShort', { v: F.money(p.commission) }) : ' ')),
+        h('div', { class: 'c' }, p.premium ? App.commissionText(p, true) : ' ')),
       h('div', { class: 'no-print' }, App.policyActions(p)),
       open ? policyDetail(p, c) : null);
     return row;
@@ -378,7 +407,7 @@
         h('thead', null, h('tr', null, [t('common.month'), t('field.policyType'), t('field.company'), t('field.policyNo'), t('field.plate'), t('field.endDate'), t('field.premium'), t('field.commission')].map(function (x, i) { return h('th', { class: i >= 6 ? 'r' : null }, x); }))),
         h('tbody', null, list.slice().sort(function (a, b) { return U.cmp(a.month, b.month); }).map(function (p) {
           var cx = Store.cancelOf(p.id);
-          return h('tr', null, h('td', null, F.month(p.month)), h('td', null, (p.policyType || '') + (cx ? ' (' + t('cancel.monthOf', { m: F.month(cx.month, true) }) + ')' : '')), h('td', null, Store.companyLabel(p.company)), h('td', null, p.policyNo || ''), h('td', null, p.plate || ''), h('td', null, F.date(p.endDate)), h('td', { class: 'r' }, F.money(p.premium)), h('td', { class: 'r' }, F.money(p.commission)));
+          return h('tr', null, h('td', null, F.month(p.month)), h('td', null, (p.policyType || '') + (cx ? ' (' + t('cancel.monthOf', { m: F.month(cx.month, true) }) + ')' : '')), h('td', null, Store.companyLabel(p.company)), h('td', null, p.policyNo || ''), h('td', null, p.plate || ''), h('td', null, F.date(p.endDate)), h('td', { class: 'r' }, F.money(p.premium)), h('td', { class: 'r' }, F.money(Portfolio.commissionOf(p).value)));
         })),
         h('tfoot', null, h('tr', null, h('td', { colspan: 6 }, t('common.total') + ' · ' + t('customer.policyCount', { n: tot.count })), h('td', { class: 'r' }, F.money(tot.premium)), h('td', { class: 'r' }, F.money(tot.commission))))));
   }
@@ -528,7 +557,7 @@
             h('div', { class: 'month-head' }, icon('calendar-days'), h('h3', null, h('a', { href: '#ay-' + k, style: { color: 'inherit' } }, F.month(k))),
               ps.length ? h('span', { class: 'chip' }, t('customer.policyCount', { n: ps.length })) : null,
               xs.length ? UI.pill(t('cancel.monthChip', { n: xs.length }), 'cancel') : null,
-              ps.length ? h('span', { class: 'sum' }, F.money(U.sum(ps, function (p) { return p.premium; })) + ' · ' + t('customer.commShort', { v: F.money(U.sum(ps, function (p) { return p.commission; })) })) : null),
+              ps.length ? h('span', { class: 'sum' }, F.money(U.sum(ps, function (p) { return p.premium; })) + ' · ' + t('customer.commShort', { v: F.money(U.sum(ps, function (p) { return Portfolio.commissionOf(p).value; })) })) : null),
             ps.map(function (p) { return policyRow(p, c, vs); }),
             xs.map(function (x) {
               var p = Store.policies.get(x.policyId);

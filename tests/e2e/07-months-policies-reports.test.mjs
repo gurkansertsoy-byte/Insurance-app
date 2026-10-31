@@ -31,7 +31,7 @@ test('a month opens exactly like its Excel page', async () => {
   const fullHead = Array.from(XLSX.utils.sheet_to_json(original.Sheets.MART, { header: 1 })[0]);
   const excelHead = fullHead.slice(0, fullHead.indexOf(undefined));
   assert.deepEqual(head, excelHead, 'same headers, same order, duplicates included; the İptal block is shown on its own');
-  assert.equal(await page.$$eval('table.sheet tbody tr', r => r.length), expected.months['2026-03'].count);
+  assert.equal(await page.$$eval('table.sheet tbody tr', r => r.length), expected.months['2026-03'].rows, 'every row of the page, the cancelling ones too');
   await page.fill('#month-q', 'kemal');
   await page.waitForFunction(() => document.querySelectorAll('table.sheet tbody tr').length === 2);
   await page.fill('#month-q', '');
@@ -115,11 +115,16 @@ test('reports: totals, date range and Excel report', async () => {
   assert.equal(await page.$$eval('#rep-monthly tbody tr', r => r.length), 3);
   const file = await download(page, () => page.click('#report-export'));
   const wb = readBook(file.bytes);
-  assert.equal(wb.SheetNames.length, 5);
-  assert.equal(wb.SheetNames[4], 'İptaller');
+  assert.deepEqual(wb.SheetNames.slice(4), ['İptaller', 'YENİ İŞ türleri']);
   const monthly = sheetRows(wb, wb.SheetNames[0]);
   assert.equal(monthly.length, 1 + 3 + 1, 'header, 3 months, total');
   assert.equal(monthly[4][1], keys.reduce((s, k) => s + expected.months[k].count, 0));
+  // what YENİ İŞ says in those months: every row of the pages, in the six kinds
+  const kinds = sheetRows(wb, 'YENİ İŞ türleri');
+  assert.deepEqual(kinds[0], ['Ay', 'Yeni iş', 'Yenileme', 'Ek', 'Zeyil', 'İptal', 'Bilinmiyor', 'Toplam satır']);
+  const order = ['new', 'renewal', 'ek', 'zeyil', 'cancel', 'unknown'];
+  keys.forEach((k, i) => assert.deepEqual(kinds[1 + i].slice(1, 7), order.map(o => expected.months[k].kinds[o]), k));
+  assert.equal(kinds[4][7], keys.reduce((s, k) => s + expected.months[k].rows, 0));
   await page.selectOption('#rep-from', '');
   await page.selectOption('#rep-to', '');
   assert.match(await text(page, '#rep-retention'), /Ekim 2026/);
@@ -135,7 +140,7 @@ test('deleting a month needs the month name typed', async () => {
   assert.ok(await page.isVisible('dialog[open]'), 'wrong text keeps the dialog open');
   await confirmDialog(page, 'MART 2026');
   await waitHash(page, '#aylar');
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies - expected.months['2026-03'].count);
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows - expected.months['2026-03'].rows);
   assert.equal(await page.$('#month-2026-03'), null);
   assert.deepEqual(env.errors, []);
 });

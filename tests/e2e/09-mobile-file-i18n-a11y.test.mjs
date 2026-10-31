@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { setup, waitHash, loadDemo, go, text, expected, store, readBook, sheetRows, ROOT } from './helpers.mjs';
 
-const PAGES = ['panel', 'musteriler', 'policeler', 'aylar', 'ay-2026-10', 'yenilemeler', 'tahsilat', 'gorevler', 'raporlar', 'ice-aktar', 'ayarlar', 'yeni'];
+const PAGES = ['panel', 'musteriler', 'policeler', 'aylar', 'ay-2026-10', 'iptaller', 'yenilemeler', 'tahsilat', 'gorevler', 'raporlar', 'ice-aktar', 'ayarlar', 'yeni'];
 const KEY_RE = /\b(app|nav|common|field|id|search|period|days|state|chart|table|dash|opp|customers|customer|policy|form|policies|pay|months|renewals|collections|tasks|reports|report|export|import|dup|activity|settings)\.[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)?\b/;
 
 test('phone screen: no sideways scrolling, menu drawer, tables become cards', async () => {
@@ -146,7 +146,7 @@ test('inside a preview frame: files go through the viewer\'s save dialog, or the
     await frame.click('#backup-btn');
     await frame.waitForFunction(() => window.__saves.length === 3 && Store.settings.lastBackupAt);
     const backup = JSON.parse(await frame.evaluate(() => window.__saves[2].data));
-    assert.equal(backup.policies.length, expected.totalPolicies);
+    assert.equal(backup.policies.length, expected.totalRows);
     assert.match(backup.app, /sigorta-portfoy/);
     // a frame with no save dialog: the app says so instead of failing silently
     await frame.evaluate(() => { window.__noViewer = true; });
@@ -163,10 +163,10 @@ test('works when index.html is opened straight from disk (file://)', async () =>
     const { page, base } = env;
     assert.match(base, /^file:\/\//);
     await loadDemo(page, base);
-    assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies);
+    assert.equal(await store(page, () => Store.policies.size), expected.totalRows);
     await page.reload();
     await page.waitForFunction(() => window.Store && Store.loaded);
-    assert.deepEqual(await store(page, () => [Store.policies.size, DB.kind]), [expected.totalPolicies, 'indexeddb']);
+    assert.deepEqual(await store(page, () => [Store.policies.size, DB.kind]), [expected.totalRows, 'indexeddb']);
     assert.deepEqual(env.errors, []);
   } finally { await env.close(); }
 });
@@ -178,7 +178,7 @@ test('the single-file build (dist/sigorta-portfoy.html) works on its own from di
     const requests = [];
     page.on('request', (r) => { if (!r.url().startsWith('file://') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) requests.push(r.url()); });
     await loadDemo(page, base);
-    assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies);
+    assert.equal(await store(page, () => Store.policies.size), expected.totalRows);
     assert.equal(await page.evaluate(() => document.fonts.check('600 14px "IBM Plex Sans"')), true, 'embedded font');
     assert.deepEqual(requests, [], 'nothing loaded from the network');
     assert.deepEqual(env.errors, []);

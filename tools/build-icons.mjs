@@ -14,7 +14,7 @@ credit-card lightbulb list history external-link menu eye eye-off cloud-upload f
 circle-alert circle-x hand-coins receipt notebook-pen sticky-note link arrow-right arrow-left briefcase building-2 plane
 hard-drive keyboard command zap star filter-x sparkles badge-percent calculator file-down file-up chart-pie trending-up
 trending-down ban file-x unlink link-2 file-check file-warning lock cloud-check cloud-alert refresh-ccw file-search
-file-lock file-question file-plus`.split(/\s+/).filter(Boolean);
+file-lock file-question file-plus circle-help`.split(/\s+/).filter(Boolean);
 
 const out = {};
 for (const n of names) {

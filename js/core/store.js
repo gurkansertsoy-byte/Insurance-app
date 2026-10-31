@@ -112,7 +112,19 @@
 
   Store.derived = function () {
     if (cache.v === Store.version) return cache;
-    var policies = Array.from(Store.policies.values());
+    var rows = Array.from(Store.policies.values());
+    // a row that writes an earlier row's policy number again: a cancellation of that policy (then it is no policy
+    // of its own), an addition to it (EK / ZEYİL), or a question for the user (plus amounts)
+    var repeats = Portfolio.findRepeats(rows, Store.customers);
+    var policies = [], cancelRows = [], questions = [], endorsements = new Set();
+    rows.forEach(function (p) {
+      var eff = Portfolio.repeatEffect(p, repeats.get(p.id));
+      if (eff === 'cancel') { cancelRows.push(p); return; }
+      policies.push(p);
+      if (eff === 'ask') questions.push(p);
+      var k = Portfolio.kindOf(p);
+      if (eff === 'endorse' || k === 'ek' || k === 'zeyil') endorsements.add(p.id);
+    });
     var byCustomer = new Map();
     policies.forEach(function (p) {
       if (!byCustomer.has(p.customerId)) byCustomer.set(p.customerId, []);
@@ -120,23 +132,43 @@
     });
     byCustomer.forEach(function (list) { list.sort(function (a, b) { return a.month < b.month ? 1 : a.month > b.month ? -1 : U.cmp(a.endDate, b.endDate); }); });
     var monthSet = new Set();
-    policies.forEach(function (p) { if (p.month) monthSet.add(p.month); });
+    rows.forEach(function (p) { if (p.month) monthSet.add(p.month); });
     var today = U.todayISO();
-    var cancelByPolicy = new Map(), cancelsByMonth = new Map();
-    Store.cancellations.forEach(function (x) {
-      if (x.policyId && Store.policies.has(x.policyId)) cancelByPolicy.set(x.policyId, x);
+    var cancelByPolicy = new Map(), cancelsByMonth = new Map(), cancelOfRow = new Map();
+    function addCancel(x) {
+      if (x.policyId && Store.policies.has(x.policyId) && !cancelByPolicy.has(x.policyId)) cancelByPolicy.set(x.policyId, x);
       if (x.month) { monthSet.add(x.month); if (!cancelsByMonth.has(x.month)) cancelsByMonth.set(x.month, []); cancelsByMonth.get(x.month).push(x); }
+    }
+    Store.cancellations.forEach(addCancel);
+    // the cancelling rows of the table, shown and counted like the rows of the İptal block
+    cancelRows.forEach(function (q) {
+      var info = repeats.get(q.id);
+      var base = info.of ? Store.policies.get(info.of) : null;
+      var c = Store.customers.get(q.customerId);
+      var x = Object.assign({
+        id: 'row-' + q.id, kind: 'row', rowId: q.id, month: q.month, policyId: base ? base.id : null,
+        match: q.repeatDecision === 'cancel' ? 'manual' : base ? 'auto' : 'none', candidates: [], locked: q.repeatDecision === 'cancel',
+        company: q.company || (base && base.company) || '', policyText: q.policyType || (base && base.policyType) || q.policyNo || '',
+        insuredName: q.insuredName || (c && c.name) || '', policyNo: q.policyNo || '', source: q.source, createdAt: q.createdAt
+      }, Portfolio.rowCancelAmounts(q, base));
+      cancelOfRow.set(q.id, x);
+      addCancel(x);
     });
     cancelsByMonth.forEach(function (list) { list.sort(function (a, b) { return (a.source && a.source.row || 1e9) - (b.source && b.source.row || 1e9) || (a.createdAt || 0) - (b.createdAt || 0); }); });
     cache = {
       v: Store.version,
       today: today,
-      policies: policies,
+      policies: policies,      // every row that is a policy (cancelling rows are not)
+      rows: rows,              // every row, as the month pages of the file have them
       byCustomer: byCustomer,
       months: Array.from(monthSet).sort(),
       cancelByPolicy: cancelByPolicy,
       cancelsByMonth: cancelsByMonth,
-      renewal: Portfolio.renewalInfo(policies, { today: today, windowDays: Number(Store.settings.renewalWindow) || 30, cancelled: cancelByPolicy }),
+      cancelOfRow: cancelOfRow,
+      repeats: repeats,
+      questions: questions,
+      endorsements: endorsements,
+      renewal: Portfolio.renewalInfo(policies, { today: today, windowDays: Number(Store.settings.renewalWindow) || 30, cancelled: cancelByPolicy, skip: endorsements }),
       companyNames: Portfolio.companyNames(policies)
     };
     summaryCache = new Map();
@@ -146,8 +178,43 @@
 
   Store.policiesOf = function (customerId) { return Store.derived().byCustomer.get(customerId) || []; };
 
-  /** The İptal row that cancelled this policy, or null. */
+  /** The İptal row (or the cancelling row of the table) that cancelled this policy, or null. */
   Store.cancelOf = function (policyId) { return Store.derived().cancelByPolicy.get(policyId) || null; };
+  /** Every cancellation: İptal block rows and cancelling rows of the table. */
+  Store.allCancels = function () {
+    var out = [];
+    Store.derived().cancelsByMonth.forEach(function (list) { out.push.apply(out, list); });
+    return out;
+  };
+  /** What a cancellation refunded to the customer, and the commission the insurer takes back. */
+  Store.refundOf = function (x) { return x.kind === 'row' ? x.refund : Portfolio.refundOf(x); };
+  Store.reclaimOf = function (x) {
+    if (x.kind === 'row') return x.reclaim;
+    return Portfolio.blockReclaim(x, x.policyId ? Store.policies.get(x.policyId) : null);
+  };
+  /** A row of the table and what it is: { info (findRepeats), effect: 'cancel' | 'ask' | 'endorse' | null }. */
+  Store.repeatOf = function (rowId) {
+    var d = Store.derived();
+    var info = d.repeats.get(rowId);
+    var p = Store.policies.get(rowId);
+    return info && p ? { info: info, effect: Portfolio.repeatEffect(p, info) } : null;
+  };
+  /** The user's answer for a row that writes a policy number again: 'cancel', 'not', or null to let the app decide. */
+  Store.decideRepeat = function (rowId, decision) {
+    var p = Store.policies.get(rowId);
+    if (!p) return;
+    if (decision) p.repeatDecision = decision; else delete p.repeatDecision;
+    p.updatedAt = Date.now();
+    put('policies', [p]);
+    Store.log({ customerId: p.customerId, policyId: p.id, type: decision === 'cancel' ? 'repeatCancel' : decision === 'not' ? 'repeatNot' : 'repeatAuto', text: [p.policyType, p.policyNo].filter(Boolean).join(' · ') });
+    emit();
+  };
+  /** Rows that add to this policy (EK / ZEYİL with its number). */
+  Store.endorsementsOf = function (policyId) {
+    var d = Store.derived(), out = [];
+    d.repeats.forEach(function (info, id) { if (info.of === policyId && info.kind === 'endorse') { var q = Store.policies.get(id); if (q) out.push(q); } });
+    return out;
+  };
   Store.cancellationsOf = function (month) { return Store.derived().cancelsByMonth.get(month) || []; };
   Store.isCancelled = function (policyId) { return Store.derived().cancelByPolicy.has(policyId); };
 
@@ -171,7 +238,7 @@
     var s = { count: list.length, premium: 0, commission: 0, active: 0, cancelled: 0, nextEnd: null, nextDays: null, outstanding: 0, months: [], cats: [], first: null, last: null };
     list.forEach(function (p) {
       s.premium += p.premium || 0;
-      s.commission += p.commission || 0;
+      s.commission += Portfolio.commissionOf(p).value;
       if (p.month) months.add(p.month);
       cats.add(Schema.categoryOf(p.policyType));
       if (d.cancelByPolicy.has(p.id)) { s.cancelled++; s.outstanding += Store.outstanding(p); return; }
@@ -445,6 +512,11 @@
     var isNew = !p;
     if (!p) p = { id: U.uid('p'), createdAt: now, source: { type: 'manual' } };
     var before = isNew ? null : JSON.stringify(p);
+    if (p.businessText && data.policy.newBusiness !== undefined) {
+      var bk = U.businessKind(p.businessText);
+      var implied = bk === 'new' ? true : bk === 'renewal' ? false : null;
+      if ((data.policy.newBusiness == null ? null : data.policy.newBusiness) !== implied) delete p.businessText;
+    }
     POLICY_INPUT.forEach(function (k) {
       var v = data.policy[k];
       if (v === undefined) return;
@@ -599,9 +671,17 @@
       todo.push(x);
     });
     if (!todo.length) return [];
+    // rows that cancel another row are no candidates, and the policies they cancel are taken
+    var rows = Array.from(Store.policies.values());
+    var rep = Portfolio.findRepeats(rows, Store.customers);
+    var candidates = rows.filter(function (p) {
+      var eff = Portfolio.repeatEffect(p, rep.get(p.id));
+      if (eff === 'cancel' && rep.get(p.id).of) taken.push(rep.get(p.id).of);
+      return eff !== 'cancel';
+    });
     var found = Portfolio.matchCancellations(todo.map(function (x) {
       return { id: x.id, month: x.month, company: x.company, policyText: x.policyText, insuredName: x.insuredName, card: x.card, account: x.account, cash: x.cash, row: x.source && x.source.row };
-    }), Array.from(Store.policies.values()), Store.customers, { taken: taken });
+    }), candidates, Store.customers, { taken: taken });
     var changed = [];
     todo.forEach(function (x) {
       var r = found.get(x.id);
@@ -844,7 +924,8 @@
       Store.customers.forEach(function (c) { if (!left.has(c.id)) orphans.push(c); });
       orphans.forEach(function (c) { Store.customers.delete(c.id); });
     }
-    var cancels = Store.cancellationsOf(key).map(function (x) { return x.id; });
+    // the İptal block of the month (a cancelling row of the table went with the rows)
+    var cancels = Store.cancellationsOf(key).filter(function (x) { return x.kind !== 'row'; }).map(function (x) { return x.id; });
     cancels.forEach(function (id) { Store.cancellations.delete(id); });
     delete Store.months[key];
     del('policies', removed.map(function (p) { return p.id; }));

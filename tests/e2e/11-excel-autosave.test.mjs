@@ -396,7 +396,7 @@ test('deleting a month asks once; a big deletion nobody said yes to waits for a 
   assert.ok(rows.length >= 1 && rows[0].includes('Poliçe adı'), 'the page and its headers stay');
   // anything else removing many rows at once is held back
   w = await writes(page);
-  const n = await store(page, () => { const x = Store.cancellationsOf('2026-06').length; return Store.deleteMonth('2026-06', true).policies + x; });
+  const n = await store(page, () => { const x = Store.cancellationsOf('2026-06').filter(c => c.kind !== 'row').length; return Store.deleteMonth('2026-06', true).policies + x; });
   await page.waitForSelector('#excel-notice[data-status="confirm"]');
   assert.match(await text(page, '#excel-notice'), new RegExp('Excel dosyasından ' + n + ' satır silinecek'));
   assert.equal(await writes(page), w);

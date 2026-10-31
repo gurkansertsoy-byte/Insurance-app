@@ -31,6 +31,8 @@
       return (f === '_first' ? (cut > 0 ? full.slice(0, cut) : full) : (cut > 0 ? full.slice(cut + 1) : '')) || null;
     }
     if (f === 'newBusiness') {
+      // the words of the cell as they were (İMM EK, ZEYİL …); a tick the app set is written this page's way
+      if (p.businessText) return p.businessText;
       var yn = layout.yesNo || { yes: 'Evet', no: 'Hayır' };
       return p.newBusiness === true ? yn.yes || null : p.newBusiness === false ? (yn.no || null) : null;
     }

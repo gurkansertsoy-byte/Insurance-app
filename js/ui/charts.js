@@ -4,12 +4,13 @@
   var UI = root.UI, U = root.U;
   var h = UI.h;
 
-  function niceTicks(max, count) {
+  function niceTicks(max, count, integer) {
     if (!(max > 0)) return [0, 1];
     var raw = max / count;
     var mag = Math.pow(10, Math.floor(Math.log10(raw)));
     var norm = raw / mag;
     var step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+    if (integer) step = Math.max(1, Math.ceil(step)); // counts: no 0,5 rows
     var ticks = [];
     for (var v = 0; v < max + step * 0.999; v += step) ticks.push(Math.round(v * 1e6) / 1e6);
     if (ticks.length < 2) ticks.push(step);
@@ -44,7 +45,8 @@
     UI.clear(t);
     t.appendChild(h('div', { class: 'tt' }, title));
     rows.forEach(function (r) {
-      if (r.series) t.appendChild(h('div', { class: 'tr' }, h('span', { class: 'ln', style: { background: r.color } }), h('span', { style: { fontWeight: 600 } }, r.value), h('span', { class: 'tl' }, r.series)));
+      if (r.series) t.appendChild(h('div', { class: 'tr' }, h('span', { class: 'ln', style: r.dashed ? { borderTop: '2px dashed ' + r.color, background: 'transparent', height: '0' } : { background: r.color } }),
+        h('span', { style: { fontWeight: 600 } }, r.value), h('span', { class: 'tl' }, r.series)));
       else t.appendChild(h('div', { class: r.sub ? 'tr' : 'tv' }, r.value));
     });
     t.hidden = false;
@@ -87,13 +89,15 @@
    * Single-series columns. o: { data: [{ key, label, short, value, tip: [rows] }], format(v), tickFormat(v),
    *   height, ariaLabel, onClick(d) }
    */
+  /** One series of columns. o: { data: [{ key, label, short, value, tip, color }], color, hollow, format, tickFormat, labelFormat,
+      height, padL, tickCount, integer (counts), onClick(d), ariaLabel } */
   function columns(o) {
     return mount(function (el, W) {
-      var H = o.height || 230, padL = 54, padR = 10, padT = 24, padB = 28;
+      var H = o.height || 230, padL = o.padL || 54, padR = 10, padT = 24, padB = 28;
       var data = o.data, n = Math.max(1, data.length);
       var max = 0, maxIdx = 0;
       data.forEach(function (d, i) { if ((d.value || 0) > max) { max = d.value || 0; maxIdx = i; } });
-      var ticks = niceTicks(max, 4), top = ticks[ticks.length - 1] || 1;
+      var ticks = niceTicks(max, o.tickCount || 4, o.integer), top = ticks[ticks.length - 1] || 1;
       var plotW = W - padL - padR, plotH = H - padT - padB;
       var band = plotW / n;
       var bw = Math.max(3, Math.min(24, band * 0.6));
@@ -111,7 +115,10 @@
       var labelMax = maxIdx !== lastIdx && !(Math.abs(maxIdx - lastIdx) === 1 && band < 64);
       data.forEach(function (d, i) {
         var cx = padL + band * i + band / 2, v = d.value || 0, yy = y(v);
-        var bar = h('path', { class: 'mark', d: roundTop(cx - bw / 2, yy, bw, y(0) - yy, 4), fill: d.color || o.color || 'var(--chart-1)' });
+        var color = d.color || o.color || 'var(--chart-1)';
+        // a hollow series ("not known") is a dashed outline, told apart by its shape
+        var bar = o.hollow ? h('rect', { class: 'mark', x: cx - bw / 2 + 0.75, y: yy + 0.75, width: Math.max(0, bw - 1.5), height: Math.max(0, y(0) - yy - 1.5), rx: 3,
+          fill: 'none', stroke: color, 'stroke-width': 1.5, 'stroke-dasharray': '3 2' }) : h('path', { class: 'mark', d: roundTop(cx - bw / 2, yy, bw, y(0) - yy, 4), fill: color });
         svg.appendChild(bar);
         if ((lastIdx - i) % every === 0) svg.appendChild(h('text', { x: cx, y: H - 9, 'text-anchor': 'middle', class: 'lbl' }, d.short || d.label));
         if (v > 0 && (i === lastIdx || (i === maxIdx && labelMax))) {
@@ -130,7 +137,10 @@
     });
   }
 
-  /** Stacked columns. o: { data: [{ label, short, values: [..] }], series: [{ label, color }], format } */
+  /**
+   * Stacked columns. o: { data: [{ label, short, values: [..] }], series: [{ label, color, hollow }], format, tipTitle(d), onClick(d) }
+   * A hollow series is drawn as a dashed outline (told apart by its shape: "not known").
+   */
   function stackedColumns(o) {
     return mount(function (el, W) {
       var H = o.height || 230, padL = 46, padR = 10, padT = 14, padB = 28;
@@ -159,17 +169,88 @@
           var y1 = y(acc + v), y0 = y(acc);
           var gap = acc > 0 ? 2 : 0;
           var hgt = Math.max(0, y0 - y1 - gap);
-          var path = si === topIdx ? roundTop(cx - bw / 2, y1, bw, hgt, 4) : 'M' + (cx - bw / 2) + ',' + y1 + 'h' + bw + 'v' + hgt + 'h' + (-bw) + 'Z';
-          g.appendChild(h('path', { d: path, fill: o.series[si].color }));
+          var sr = o.series[si];
+          if (sr.hollow) {
+            g.appendChild(h('rect', { x: cx - bw / 2 + 0.75, y: y1 + 0.75, width: Math.max(0, bw - 1.5), height: Math.max(0, hgt - 1.5), rx: si === topIdx ? 3 : 0,
+              fill: 'none', stroke: sr.color, 'stroke-width': 1.5, 'stroke-dasharray': '3 2' }));
+          } else {
+            var path = si === topIdx ? roundTop(cx - bw / 2, y1, bw, hgt, 4) : 'M' + (cx - bw / 2) + ',' + y1 + 'h' + bw + 'v' + hgt + 'h' + (-bw) + 'Z';
+            g.appendChild(h('path', { d: path, fill: sr.color }));
+          }
           acc += v;
         });
         svg.appendChild(g);
         if ((data.length - 1 - i) % every === 0) svg.appendChild(h('text', { x: cx, y: H - 9, 'text-anchor': 'middle', class: 'lbl' }, d.short || d.label));
-        var hit = h('rect', { class: 'hit', x: padL + band * i, y: padT, width: band, height: plotH + padB, tabindex: 0, role: 'img', 'aria-label': d.label });
+        var hit = h('rect', { class: 'hit', x: padL + band * i, y: padT, width: band, height: plotH + padB, tabindex: 0, role: 'img',
+          'aria-label': d.label + ': ' + o.series.map(function (s, si) { return s.label + ' ' + o.format(d.values[si] || 0); }).join(', ') });
         bindHover(hit, el, g, function () {
-          var rows = o.series.map(function (s, si) { return { series: s.label, value: o.format(d.values[si] || 0), color: s.color }; }).reverse();
-          showTip(el, cx, y(U.sum(d.values)) - 4, d.label, rows);
+          var rows = o.series.map(function (s, si) { return { series: s.label, value: o.format(d.values[si] || 0), color: s.color, dashed: s.hollow }; }).reverse();
+          showTip(el, cx, y(U.sum(d.values)) - 4, o.tipTitle ? o.tipTitle(d) : d.label, rows);
         });
+        if (o.onClick) {
+          hit.style.cursor = 'pointer';
+          hit.addEventListener('click', function () { o.onClick(d); });
+          hit.addEventListener('keydown', function (e) { if (e.key === 'Enter') o.onClick(d); });
+        }
+        svg.appendChild(hit);
+      });
+      el.appendChild(svg);
+    });
+  }
+
+  /**
+   * Several series over the same months on one axis, a crosshair and every value of the month on hover.
+   * o: { data: [{ key, label, short, values: [..] }], series: [{ label, color, dashed }], format, tickFormat, height, tipTitle(d), onClick(d) }
+   */
+  function lines(o) {
+    return mount(function (el, W) {
+      var H = o.height || 260, padL = 46, padR = 14, padT = 14, padB = 28;
+      var data = o.data, n = Math.max(1, data.length);
+      var max = 0;
+      data.forEach(function (d) { d.values.forEach(function (v) { if (v > max) max = v; }); });
+      var ticks = niceTicks(max, 4), top = ticks[ticks.length - 1] || 1;
+      var plotW = W - padL - padR, plotH = H - padT - padB;
+      var band = plotW / n;
+      var x = function (i) { return padL + band * i + band / 2; };
+      var y = function (v) { return padT + plotH - (v / top) * plotH; };
+      var svg = h('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': o.ariaLabel || '' });
+      var grid = h('g', { class: 'grid' });
+      ticks.forEach(function (tk) { grid.appendChild(h('line', { x1: padL, x2: W - padR, y1: y(tk), y2: y(tk) })); });
+      svg.appendChild(grid);
+      ticks.forEach(function (tk) { svg.appendChild(h('text', { x: padL - 8, y: y(tk) + 4, 'text-anchor': 'end' }, (o.tickFormat || U.fmtCompact)(tk))); });
+      svg.appendChild(h('g', { class: 'axis' }, h('line', { x1: padL, x2: W - padR, y1: y(0), y2: y(0) })));
+      var every = Math.max(1, Math.ceil(40 / band));
+      data.forEach(function (d, i) { if ((data.length - 1 - i) % every === 0) svg.appendChild(h('text', { x: x(i), y: H - 9, 'text-anchor': 'middle', class: 'lbl' }, d.short || d.label)); });
+      var cross = h('line', { class: 'crosshair', x1: 0, x2: 0, y1: padT, y2: padT + plotH, visibility: 'hidden' });
+      svg.appendChild(cross);
+      o.series.forEach(function (s, si) {
+        var dpath = data.map(function (d, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(d.values[si] || 0).toFixed(1); }).join('');
+        svg.appendChild(h('path', { class: 'series-line', d: dpath, fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', 'stroke-dasharray': s.dashed ? '5 4' : null }));
+      });
+      var dots = h('g', { class: 'dots' });
+      svg.appendChild(dots);
+      data.forEach(function (d, i) {
+        var hit = h('rect', { class: 'hit', x: padL + band * i, y: padT, width: band, height: plotH + padB, tabindex: 0, role: 'img',
+          'aria-label': d.label + ': ' + o.series.map(function (s, si) { return s.label + ' ' + o.format(d.values[si] || 0); }).join(', ') });
+        function show() {
+          cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+          UI.clear(dots);
+          o.series.forEach(function (s, si) {
+            dots.appendChild(h('circle', { cx: x(i), cy: y(d.values[si] || 0), r: 4, fill: s.dashed ? 'var(--surface)' : s.color, stroke: s.dashed ? s.color : 'var(--surface)', 'stroke-width': 2 }));
+          });
+          var rows = o.series.map(function (s, si) { return { series: s.label, value: o.format(d.values[si] || 0), color: s.color, dashed: s.dashed }; });
+          showTip(el, x(i), y(Math.max.apply(null, d.values.concat([0]))) - 6, o.tipTitle ? o.tipTitle(d) : d.label, rows);
+        }
+        function hide() { cross.setAttribute('visibility', 'hidden'); UI.clear(dots); hideTip(el); }
+        hit.addEventListener('pointerenter', show);
+        hit.addEventListener('pointerleave', hide);
+        hit.addEventListener('focus', show);
+        hit.addEventListener('blur', hide);
+        if (o.onClick) {
+          hit.style.cursor = 'pointer';
+          hit.addEventListener('click', function () { o.onClick(d); });
+          hit.addEventListener('keydown', function (e) { if (e.key === 'Enter') o.onClick(d); });
+        }
         svg.appendChild(hit);
       });
       el.appendChild(svg);
@@ -260,7 +341,7 @@
   }
 
   root.Charts = {
-    columns: columns, stackedColumns: stackedColumns, hbars: hbars, stackBar: stackBar, sparkline: sparkline,
+    columns: columns, stackedColumns: stackedColumns, lines: lines, hbars: hbars, stackBar: stackBar, sparkline: sparkline,
     card: card, miniTable: miniTable, niceTicks: niceTicks
   };
 })(typeof self !== 'undefined' ? self : this);

@@ -36,11 +36,12 @@ test('search inside the list, filters and chips', async () => {
   await page.click('#chip-multi');
   assert.match(await text(page, '#customers-count'), new RegExp(num(expected.multiMonthCustomers) + ' müşteri'));
   await page.click('#chip-multi');
-  const marchCustomers = await store(page, () => new Set(Array.from(Store.policies.values()).filter(p => p.month === '2026-03').map(p => p.customerId)).size);
+  // a row that only cancels an earlier policy is no policy of the month
+  const marchCustomers = await store(page, () => new Set(Store.derived().policies.filter(p => p.month === '2026-03').map(p => p.customerId)).size);
   await page.selectOption('#customers-month', '2026-03');
   assert.match(await text(page, '#customers-count'), new RegExp(num(marchCustomers) + ' müşteri'));
   await page.selectOption('#customers-month', '');
-  const allianz = await store(page, () => new Set(Array.from(Store.policies.values()).filter(p => U.companyKey(p.company || '') === 'allianz').map(p => p.customerId)).size);
+  const allianz = await store(page, () => new Set(Store.derived().policies.filter(p => U.companyKey(p.company || '') === 'allianz').map(p => p.customerId)).size);
   await page.selectOption('#customers-company', 'allianz');
   assert.match(await text(page, '#customers-count'), new RegExp(num(allianz) + ' müşteri'));
   await page.selectOption('#customers-company', '');
@@ -182,10 +183,10 @@ test('delete a customer and undo', async () => {
   await confirmDialog(page);
   await waitHash(page, '#musteriler');
   assert.equal(await store(page, (id) => Store.customers.has(id), showId), false);
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies - expected.showcase.policyCount);
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows - expected.showcase.policyCount);
   await page.click('.toast button:has-text("Geri al")');
   await waitHash(page, '#musteri-' + showId);
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies);
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows);
   assert.equal(await text(page, '#stat-policies'), String(expected.showcase.policyCount));
 });
 

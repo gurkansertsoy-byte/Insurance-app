@@ -8,7 +8,7 @@
   'use strict';
 
   var POLICY_FIELDS = ['policyType', 'company', 'policyNo', 'startDate', 'endDate', 'issueDate', 'plate', 'serialNo',
-    'step', 'premium', 'netPremium', 'commission', 'newBusiness', 'card', 'account', 'cash', 'note', 'insuredName', 'agent'];
+    'step', 'premium', 'netPremium', 'commission', 'newBusiness', 'businessText', 'card', 'account', 'cash', 'note', 'insuredName', 'agent'];
   var CUSTOMER_FIELDS = ['name', 'tc', 'phone', 'email', 'profession', 'address', 'birthDate'];
   var NOT_RENEWABLE = { seyahat: true };
 
@@ -238,8 +238,11 @@
       var p = policyFromRecord(rec, c.id, ctx);
       var key = policyKey(p, c.name);
       var pool = byKey.get(key) || [];
-      var target = null;
-      for (var i = 0; i < pool.length; i++) { if (!claimed.has(pool[i].id)) { target = pool[i]; break; } }
+      var free = pool.filter(function (x) { return !claimed.has(x.id); });
+      // two rows with one key (a policy and its cancellation on the same page): the one from this very row first,
+      // then the one with the same amount, so the two never swap
+      var target = free.filter(function (x) { return x.source && x.source.sheet === rec.sheet && x.source.row === rec.row; })[0] ||
+        free.filter(function (x) { return String(x.premium) === String(p.premium); })[0] || free[0] || null;
       if (target) {
         claimed.add(target.id);
         if (updateFromImport(target, p, ctx.now)) res.updated.push(target); else res.unchanged++;
@@ -377,6 +380,7 @@
     var today = opts.today || U.todayISO();
     var windowDays = opts.windowDays || 30;
     var cancelled = opts.cancelled || null;
+    var skip = opts.skip || null; // EK / ZEYİL rows: renewed with the policy they belong to
     var out = new Map();
     var byCustomer = U.groupBy(policies, function (p) { return p.customerId; });
     byCustomer.forEach(function (list) {
@@ -393,13 +397,13 @@
           out.set(p.id, info);
           return;
         }
-        if (!p.endDate) { out.set(p.id, info); return; }
+        if (!p.endDate || (skip && skip.has(p.id))) { out.set(p.id, info); return; }
         info.daysLeft = U.diffDays(today, p.endDate);
         if (NOT_RENEWABLE[a.cat]) { info.state = 'short'; out.set(p.id, info); return; }
         var succ = null;
         for (var i = 0; i < meta.length && !succ; i++) {
           var b = meta[i], q = b.p;
-          if (q === p || !q.endDate || b.cat !== a.cat) continue;
+          if (q === p || !q.endDate || b.cat !== a.cat || (skip && skip.has(q.id))) continue;
           if (cancelled && cancelled.has(q.id)) continue; // a cancelled renewal does not count
           if (a.cat === 'diger' && b.type !== a.type) continue;
           if (a.plate && b.plate && a.plate !== b.plate) continue;
@@ -458,6 +462,118 @@
     return out;
   }
 
+  // ------------------------------------------------------------------ YENİ İŞ, commission, repeated policy numbers
+  /** What YENİ İŞ says for this row: 'new' | 'renewal' | 'cancel' | 'ek' | 'zeyil' | 'unknown'. */
+  function kindOf(p) {
+    if (p.businessText) return U.businessKind(p.businessText);
+    return p.newBusiness === true ? 'new' : p.newBusiness === false ? 'renewal' : 'unknown';
+  }
+
+  /** The rate used when no commission is written: 10 % for Trafik, 15 % for everything else. */
+  function commissionRate(policyType) { return Schema.categoryOf(policyType) === 'trafik' ? 0.10 : 0.15; }
+
+  /** { value, estimated }: the commission written in the row, or the rate times the premium when none is written. */
+  function commissionOf(p) {
+    if (p.commission != null && p.commission !== '') return { value: p.commission, estimated: false };
+    if (!p.premium) return { value: 0, estimated: false };
+    return { value: U.round2(p.premium * commissionRate(p.policyType)), estimated: true };
+  }
+
+  /** Commission the insurer takes back for an İptal row: 10 % (Trafik) or 15 % of Kart + Cari + Nakit. */
+  function blockReclaim(x, policy) {
+    return U.round2(refundOf(x) * commissionRate((policy && policy.policyType) || x.policyText));
+  }
+
+  /**
+   * What a cancelling row gives back: the minus Poliçe tutarı is the refund to the customer, the minus Komisyon
+   * the commission the insurer takes back (or 10 % / 15 % of the refund when no commission is written).
+   */
+  function rowCancelAmounts(q, base) {
+    var pay = Math.abs(q.card || 0) + Math.abs(q.account || 0) + Math.abs(q.cash || 0);
+    var refund = q.premium ? Math.abs(q.premium) : pay;
+    var written = q.commission != null && q.commission !== '';
+    var reclaim = written ? Math.abs(q.commission) : refund * commissionRate(q.policyType || (base && base.policyType));
+    return {
+      refund: U.round2(refund), reclaim: U.round2(reclaim), reclaimEstimated: !written,
+      card: q.card ? U.round2(Math.abs(q.card)) : null, account: q.account ? U.round2(Math.abs(q.account)) : null, cash: q.cash ? U.round2(Math.abs(q.cash)) : null
+    };
+  }
+
+  function minusRow(p) { return (p.premium || 0) < 0 || (p.commission || 0) < 0; }
+  function rowPlace(a, b) {
+    return U.cmp(a.month || '', b.month || '') || (((a.source && a.source.row) || 1e9) - ((b.source && b.source.row) || 1e9)) || (a.createdAt || 0) - (b.createdAt || 0);
+  }
+  /** The month the policy's year ends in (a year after its month when no end date is written). */
+  function endMonth(p) { return p.endDate ? U.monthKeyOf(p.endDate) : U.addMonthsToKey(p.month, 12); }
+
+  /** Whatever else is written in both rows has to agree: [] when it does, else what does not ('name', 'plate', 'type'). */
+  function repeatCheck(p, q, customers) {
+    var out = [];
+    var cp = customers && customers.get ? customers.get(p.customerId) : null;
+    var cq = customers && customers.get ? customers.get(q.customerId) : null;
+    var a = [p.insuredName, cp && cp.name], b = [q.insuredName, cq && cq.name];
+    var who = p.customerId === q.customerId || a.some(function (x) { return b.some(function (y) { return sameName(x, y); }); });
+    if (!who) out.push('name');
+    if (p.plate && q.plate && U.plateKey(p.plate) !== U.plateKey(q.plate)) out.push('plate');
+    if (p.policyType && q.policyType && Schema.categoryOf(p.policyType) !== Schema.categoryOf(q.policyType)) out.push('type');
+    return out;
+  }
+
+  /**
+   * Rows that write an earlier row's policy number again (same company) before that policy's year is over: in a
+   * later month, or lower on the same page. Returns Map(rowId -> { of, kind, state, reasons, minus }):
+   *  - kind 'cancel': the policy was cancelled in that row's month. state 'auto' when its amounts are minus and the
+   *    other columns agree; 'ask' when the amounts are plus (are they a refund and commission taken back? the user
+   *    says, even when YENİ İŞ says İPTAL) or another column does not agree;
+   *  - kind 'endorse': YENİ İŞ says EK or ZEYİL, an addition to the policy.
+   * A row with minus amounts and no earlier row cancels a policy from before the file (of: null); one that only
+   * says İPTAL, with plus amounts, is asked about too. Such rows never stand for a policy written again later.
+   */
+  function findRepeats(policies, customers) {
+    var groups = new Map();
+    policies.forEach(function (p) { var k = p.policyNo ? noKey(p.policyNo) : ''; if (k.length >= 3) pushTo(groups, k, p); });
+    var out = new Map();
+    groups.forEach(function (list) {
+      if (list.length < 2) return;
+      list.sort(rowPlace);
+      var bases = [];
+      list.forEach(function (q) {
+        var base = null;
+        for (var i = bases.length - 1; i >= 0 && !base; i--) {
+          var p = bases[i];
+          if (p.company && q.company && U.companyKey(p.company) !== U.companyKey(q.company)) continue;
+          if (q.month === p.month || q.month < endMonth(p)) base = p;
+        }
+        if (!base) { // the first row, or the policy renewed under the same number
+          if (!(minusRow(q) || kindOf(q) === 'cancel')) bases.push(q);
+          return;
+        }
+        var kind = kindOf(q);
+        var info = { of: base.id, reasons: repeatCheck(base, q, customers), minus: minusRow(q) };
+        if (kind === 'ek' || kind === 'zeyil') { info.kind = 'endorse'; info.state = 'auto'; }
+        else {
+          info.kind = 'cancel';
+          info.state = info.minus && !info.reasons.length ? 'auto' : 'ask';
+        }
+        out.set(q.id, info);
+      });
+    });
+    policies.forEach(function (p) {
+      if (out.has(p.id) || !(minusRow(p) || kindOf(p) === 'cancel')) return;
+      out.set(p.id, { of: null, kind: 'cancel', state: minusRow(p) ? 'auto' : 'ask', reasons: [], minus: minusRow(p) });
+    });
+    return out;
+  }
+
+  /** What a row is once the user's answer counts: 'cancel' | 'ask' | 'endorse' | null. */
+  function repeatEffect(p, info) {
+    if (!info) return null;
+    if (p.repeatDecision === 'not') return null;
+    if (p.repeatDecision === 'cancel') return 'cancel';
+    if (info.kind === 'endorse') return 'endorse';
+    return info.state === 'auto' ? 'cancel' : 'ask';
+  }
+
   // ------------------------------------------------------------------ money
   function paidOnAccount(p) { return U.round2(U.sum(p.payments || [], function (x) { return x.amount; })); }
   /** What is still owed on the Cari part; credit = the refund an İptal row wrote to Cari. */
@@ -469,13 +585,16 @@
   }
 
   function emptyTotals(key) {
-    return { key: key, count: 0, premium: 0, commission: 0, newCount: 0, renewalCount: 0, card: 0, account: 0, cash: 0, customers: new Set() };
+    return { key: key, count: 0, premium: 0, commission: 0, commissionEst: 0, estimated: 0, newCount: 0, renewalCount: 0, card: 0, account: 0, cash: 0, customers: new Set() };
   }
 
   function addTo(t, p) {
     t.count++;
     t.premium += p.premium || 0;
-    t.commission += p.commission || 0;
+    // commission not written: 10 % (Trafik) / 15 % of the premium
+    var c = commissionOf(p);
+    t.commission += c.value;
+    if (c.estimated) { t.estimated++; t.commissionEst += c.value; }
     if (p.newBusiness === true) t.newCount++;
     else if (p.newBusiness === false) t.renewalCount++;
     t.card += p.card || 0;
@@ -491,7 +610,7 @@
   }
 
   function finish(t) {
-    ['premium', 'commission', 'card', 'account', 'cash'].forEach(function (k) { t[k] = U.round2(t[k]); });
+    ['premium', 'commission', 'commissionEst', 'card', 'account', 'cash'].forEach(function (k) { t[k] = U.round2(t[k]); });
     t.customerCount = t.customers.size;
     delete t.customers;
     return t;
@@ -565,6 +684,8 @@
     renewalInfo: renewalInfo, retention: retention, opportunities: opportunities, outstanding: outstanding,
     paidOnAccount: paidOnAccount, totals: totals, aggregate: aggregate, companyNames: companyNames,
     duplicateGroups: duplicateGroups, NOT_RENEWABLE: NOT_RENEWABLE,
-    cancelKey: cancelKey, cancelScore: cancelScore, matchCancellations: matchCancellations, refundOf: refundOf, sameName: sameName
+    cancelKey: cancelKey, cancelScore: cancelScore, matchCancellations: matchCancellations, refundOf: refundOf, sameName: sameName,
+    kindOf: kindOf, commissionRate: commissionRate, commissionOf: commissionOf, blockReclaim: blockReclaim,
+    rowCancelAmounts: rowCancelAmounts, findRepeats: findRepeats, repeatEffect: repeatEffect, repeatCheck: repeatCheck
   };
 });

@@ -9,6 +9,8 @@ test.before(async () => { env = await setup(); await loadDemo(env.page, env.base
 test.after(async () => { await env.close(); });
 
 const CX = expected.cancellations;
+// rows of the table that cancel an earlier policy by writing its number again (minus amounts)
+const rowCancels = (m) => expected.repeats.list.filter(x => (x.role === 'cancel' || x.role === 'orphan') && x.month === m).length;
 const policyByNo = (page, no) => store(page, (n) => { const p = Array.from(Store.policies.values()).find(x => x.policyNo === n); return p && { id: p.id, customerId: p.customerId, month: p.month }; }, no);
 const cancelOf = (page, pid) => store(page, (id) => { const x = Store.cancelOf(id); return x && { id: x.id, month: x.month, match: x.match, locked: !!x.locked }; }, pid);
 
@@ -23,15 +25,19 @@ test('every İptal row of the file is read; matched policies are cancelled in th
     const x = await cancelOf(page, p.id);
     assert.deepEqual([x && x.month, x && x.match], [e.month, 'auto'], e.insured);
   }
-  // the month page shows its İptal block like the end of the Excel page
+  // the month page shows its İptal block like the end of the Excel page, and the rows of the page that cancel
   await go(page, 'ay-2026-09');
-  assert.equal(await page.$$eval('#month-cancels tbody tr', r => r.length), CX.byMonth['2026-09']);
-  assert.match(await text(page, '#month-cancels .card-head'), new RegExp(CX.byMonth['2026-09'] + ' iptal'));
+  const sep = CX.byMonth['2026-09'] + rowCancels('2026-09');
+  assert.equal(rowCancels('2026-09'), 1);
+  assert.equal(await page.$$eval('#month-cancels tbody tr', r => r.length), sep);
+  assert.equal(await page.$$eval('#month-cancels tbody tr.cancel-row-kind', r => r.length), 1);
+  assert.match(await text(page, '#month-cancels .card-head'), new RegExp(sep + ' iptal'));
   assert.match(await text(page, '#month-cancels'), /Otomatik bulundu/);
   assert.match(await text(page, '#month-cancels'), /2 olası poliçe/);
+  assert.match(await text(page, '#month-cancels'), /Poliçe no tekrar yazılmış/);
   // and the months list counts them
   await go(page, 'aylar');
-  assert.match(await text(page, '#month-2026-09'), new RegExp(CX.byMonth['2026-09'] + ' iptal'));
+  assert.match(await text(page, '#month-2026-09'), new RegExp(sep + ' iptal'));
 });
 
 test('the customer card shows the cancelled policy and the cancellation in its own month', async () => {
@@ -150,7 +156,7 @@ test('importing the same file again keeps the İptal rows and the user\'s choice
   await page.waitForSelector('#import-done');
   const after = await store(page, () => ({ n: Store.cancellations.size, manual: Array.from(Store.cancellations.values()).filter(x => x.locked).map(x => x.id + ':' + (x.policyId || '')).sort() }));
   assert.deepEqual(after, before);
-  assert.equal(await store(page, () => Store.policies.size), expected.totalPolicies + 0);
+  assert.equal(await store(page, () => Store.policies.size), expected.totalRows);
 });
 
 test('month export and backup carry the İptal rows', async () => {
@@ -163,7 +169,10 @@ test('month export and backup carry the İptal rows', async () => {
   const start = head.indexOf('ŞİRKET');
   assert.ok(start > 0 && head[start - 1] == null, 'after an empty column');
   assert.deepEqual(head.slice(start), ['ŞİRKET', 'POLİÇE', 'SİGORTALI AD SOYAD', 'KART', 'CARİ', 'NAKİT']);
-  assert.equal(rows.slice(1).filter(r => r.slice(start).some(v => v != null)).length, n);
+  // the İptal block carries the block's rows; a cancelling row stays a row of the table with its minus amounts
+  assert.equal(rows.slice(1).filter(r => r.slice(start).some(v => v != null)).length, n - rowCancels('2026-09'));
+  assert.equal(rows.length - 1, expected.months['2026-09'].rows);
+  assert.ok(rows.slice(1).some(r => r.slice(0, start).includes(-22539)), 'the minus Poliçe tutarı of the cancelling row');
   await go(page, 'ayarlar');
   const bk = await download(page, () => page.click('#backup-btn'));
   const data = JSON.parse(bk.bytes.toString('utf8'));
