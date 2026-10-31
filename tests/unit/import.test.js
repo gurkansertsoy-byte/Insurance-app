@@ -402,3 +402,24 @@ test('export writes each month in its original column order and re-imports ident
   assert.ok(dateCell && dateCell.t === 'n', 'dates are real Excel dates');
   assert.equal(XLSX.SSF.format(dateCell.z, 46000), '09.12.2025', 'shown as dd.mm.yyyy');
 });
+
+test('KART / CARİ / NAKİT: read as amounts when the table ends with the İptal titles, and ticks mean the premium', () => {
+  const head = ['POLİÇE ADI', 'ADI SOYADI', 'TC KİMLİK NO', 'ŞİRKET POLİÇE TUTARI', 'KOMİSYON', 'AÇIKLAMA', 'ŞİRKET', 'POLİÇE NO', 'SİGORTALI AD SOYAD', 'KART', 'CARİ', 'NAKİT'];
+  const row = (i, pay) => ['Kasko', 'Ali Veli' + i, '', 1000 * (i + 1), 150, '', 'Axa', 'AX-' + (100 + i), 'Ali Veli' + i].concat(pay);
+  // the table's own last six columns carry the İptal block's titles, and there is no İptal block
+  const a = analyse(makeBook([{ name: 'EKİM 2026', rows: [head, row(0, [1000, null, null]), row(1, [null, 2000, null]), row(2, [null, null, 3000])] }]), 'x.xlsx');
+  assert.equal(a.sheets[0].cancelBlock, null, 'no İptal block');
+  const recs = Importer.buildRecords(a, {}).records;
+  assert.deepEqual(recs.map(r => [r.fields.card || 0, r.fields.account || 0, r.fields.cash || 0]), [[1000, 0, 0], [0, 2000, 0], [0, 0, 3000]]);
+  assert.deepEqual(recs.map(r => r.fields.company), ['Axa', 'Axa', 'Axa']);
+  // the same columns with the İptal block after an empty column: both read
+  const withBlock = [head.concat([null, 'ŞİRKET', 'POLİÇE', 'SİGORTALI AD SOYAD', 'KART', 'CARİ', 'NAKİT']), row(0, [1000, null, null]).concat([null, 'Axa', 'KASKO', 'Can Ak', 500, null, null])];
+  const b = analyse(makeBook([{ name: 'EKİM 2026', rows: withBlock }]), 'x.xlsx');
+  const built = Importer.buildRecords(b, {});
+  assert.deepEqual([built.records[0].fields.card, built.cancels.length, built.cancels[0].card], [1000, 1, 500]);
+  // X / ✓ / EVET in a payment column: paid that way, the whole premium
+  const ticks = analyse(makeBook([{ name: 'EKİM 2026', rows: [head, row(0, ['X', null, null]), row(1, [null, '✓', null]), row(2, [null, null, 'EVET'])] }]), 'x.xlsx');
+  const t = Importer.buildRecords(ticks, {}).records;
+  assert.deepEqual(t.map(r => [r.fields.card || 0, r.fields.account || 0, r.fields.cash || 0]), [[1000, 0, 0], [0, 2000, 0], [0, 0, 3000]]);
+  assert.deepEqual(t.map(r => r.issues.length), [0, 0, 0], 'a tick is no unreadable amount');
+});

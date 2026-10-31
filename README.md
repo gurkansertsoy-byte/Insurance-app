@@ -11,7 +11,7 @@ policy number written again before its year is over with minus amounts (with plu
 A missing commission is counted as 10 % of the premium for Trafik and 15 % for everything else, and the
 commission the insurer takes back on a cancellation is shown next to the refund. A chart shows each
 month's yeni iş, yenileme, ek, zeyil and iptal rows from the YENİ İŞ column. On top of that: an easy
-entry form, renewal tracking with WhatsApp reminders, on-account (cari) collections, tasks, reports
+entry form, renewal tracking with WhatsApp reminders, a cross-sell list, tasks, reports
 and Excel exports in the agency's own column layout.
 
 *Türkçe özet:* Acentenin her ayı ayrı sayfada tutulan üretim Excel'ini okur, tüm satırları
@@ -27,8 +27,8 @@ komisyon acenteden geri alınan komisyondur; tutarlar eksi değilse uygulama siz
 Trafik için primin %10'u, diğerleri için %15'i sayılır; iptalde geri alınan komisyon da aynı oranlarla
 (İPTAL bölümünde kart + cari + nakit tutarından) hesaplanır. YENİ İŞ sütununa göre her ay kaç yeni iş,
 yenileme, ek, zeyil ve iptal olduğu grafikte gösterilir ("ek" geçen satır yalnızca Ek sayılır, boş hücre
-Bilinmiyor'dur). Yeni kayıt formu, yenileme takibi, WhatsApp hatırlatma, cari
-tahsilat, görevler, raporlar ve aynı sütun düzeninde Excel çıktısı vardır. Veriler hiçbir sunucuya
+Bilinmiyor'dur). Yeni kayıt formu, yenileme takibi, WhatsApp hatırlatma, çapraz
+satış listesi, görevler, raporlar ve aynı sütun düzeninde Excel çıktısı vardır. Veriler hiçbir sunucuya
 gönderilmez.
 
 ![Dashboard](docs/screenshots/05-dashboard.png)
@@ -63,6 +63,8 @@ What the importer copes with, because real agency files look like this:
 
 - the header row anywhere in the first 30 rows, with title lines above it ("EKİM 2026 ÜRETİM LİSTESİ");
 - two-row headers (ÖDEME above Kart / Cari / Nakit) and merged cells;
+- a table that ends with the İptal block's own titles (… ŞİRKET | POLİÇE NO | SİGORTALI AD SOYAD | KART | CARİ |
+  NAKİT): these stay the table's columns; a page without Kart / Cari / Nakit is pointed out on the import screen;
 - the same column twice (two *Meslek* or two *Poliçe bitiş tarihi* columns), different wording on
   different sheets (*Branş*, *Vade Sonu*, *TCKN*, *Sigorta Şirketi* …);
 - total rows, empty rows and repeated header rows are skipped;
@@ -95,7 +97,7 @@ Columns it recognises (any spelling or upper/lower case, with or without Turkish
 | Açıklama | Açıklama, Not, Notlar |
 | Şirket | Şirket, Sigorta şirketi, Firma |
 | Sigortalı adı soyadı | Sigortalı adı soyadı, Sigortalı |
-| Kart / Cari / Nakit | Kart, Kredi kartı, POS / Cari, Cari hesap, Veresiye / Nakit, Peşin, Elden |
+| Kart / Cari / Nakit | KART / CARİ / NAKİT (also Kredi kartı, POS / Cari hesap, Veresiye / Peşin, Elden); an amount, or a tick (X, ✓, EVET) for "the whole premium paid this way" |
 | Also | Başlangıç tarihi, Tanzim tarihi, E-posta, Doğum tarihi, Adres, Net prim, Temsilci |
 
 ### 2. Every change goes into a new Excel file, automatically (yours is never changed)
@@ -215,18 +217,18 @@ Search from anywhere (Ctrl + K): name, TC, phone, plate or policy number.
 | ![Entry form](docs/screenshots/12-new-policy-form.png) | ![Pick a customer](docs/screenshots/11-new-policy-pick-customer.png) |
 | All columns of the monthly sheet in one form: TC check digits, phone and plate formatted as you type, end date = start + 1 year, commission from the rate, payment split check (Kart + Nakit + Cari = prim), extra columns. Ctrl + S saves; "Kaydet ve yeni" keeps the customer for the next policy. | Typing a name (or a TC number already on file) offers the existing customer, so the new policy lands on the same card. |
 
-### 7. Months, policies, renewals, collections, tasks
+### 7. Months, policies, renewals, cross-sell, tasks
 
 | | |
 | --- | --- |
 | ![Months](docs/screenshots/13-months.png) | ![One month](docs/screenshots/14-month-detail.png) |
 | One card per month (= one sheet): policies, new business, premium, commission and change. | A month exactly as in the Excel sheet, with its own columns; add a row to that month or export it. |
 | ![Policies](docs/screenshots/15-policies.png) | ![Renewals](docs/screenshots/16-renewals.png) |
-| All policies with filters (month range, company, branch, what YENİ İŞ says, payment, status). | Renewals by days left; renewed policies are found automatically in later months. Status (called, quoted, renewed, lost + reason), a ready WhatsApp message, reminder task, one-click renewal form. |
-| ![Collections](docs/screenshots/17-collections.png) | ![Payment](docs/screenshots/18-payment.png) |
-| Amounts written to *Cari*: open balances (largest first), the oldest unpaid one, what was collected this month. | Partial or full payments by cash, card or transfer. |
+| All policies: one search box (customer, policy no, plate, TC), month, company and branch lists, and one row of choices with their counts — all, yeni iş, yenileme, ek / zeyil, renewal coming up, expired, cancelled. | Renewals by days left; renewed policies are found automatically in later months. Status (called, quoted, renewed, lost + reason), a ready WhatsApp message, reminder task, one-click renewal form. |
+| ![Cross-sell](docs/screenshots/17-cross-sell.png) | |
+| **Çapraz satış** (in the menu): customers who could buy one more policy — kasko for a car with only a traffic policy, a traffic policy for a car with only kasko, home insurance next to DASK and DASK next to home insurance. One button per kind with its count, search by name, plate or phone, a task in one click, Excel export. | |
 | ![Tasks](docs/screenshots/19-tasks.png) | ![Reports](docs/screenshots/20-reports.png) |
-| Tasks with due dates, linked to customers; overdue ones show in the menu. | Reports for any period: monthly production, YENİ İŞ kinds per month, payment split, companies, branches, professions, top customers, renewal rate, cancellations with refunds and commission taken back, cross-sell list; print or export to Excel. |
+| Tasks with due dates, linked to customers; overdue ones show in the menu. | Reports for any period: monthly production, YENİ İŞ kinds per month, payment split, companies, branches, professions, top customers, renewal rate, cancellations with refunds and commission taken back; print or export to Excel. |
 
 ### 8. Settings, backup and your data
 

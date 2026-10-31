@@ -68,11 +68,10 @@ test('policy list: totals, filters and export', async () => {
   const count = async () => Number((await text(page, '#policies-count')).replace(/\D/g, ''));
   assert.equal(await count(), expected.totalPolicies);
   assert.match(await text(page, 'tfoot'), new RegExp(money(expected.totalPremium).replace(/\./g, '\\.')));
-  await page.selectOption('#policies-from', '2026-01');
-  await page.selectOption('#policies-to', '2026-03');
-  assert.equal(await count(), ['2026-01', '2026-02', '2026-03'].reduce((s, k) => s + expected.months[k].count, 0));
-  await page.selectOption('#policies-from', '');
-  await page.selectOption('#policies-to', '');
+  assert.equal(await page.isHidden('#policies-clear'), true, 'nothing to clear yet');
+  await page.selectOption('#policies-month', '2026-03');
+  assert.equal(await count(), expected.months['2026-03'].count);
+  await page.selectOption('#policies-month', '');
   await page.selectOption('#policies-company', 'allianz');
   assert.equal(await count(), expected.byInsurer.Allianz);
   await page.selectOption('#policies-company', '');
@@ -81,21 +80,24 @@ test('policy list: totals, filters and export', async () => {
   await page.selectOption('#policies-cat', 'saglik');
   assert.equal(await count(), expected.byKind.tss + expected.byKind.saglik);
   await page.selectOption('#policies-cat', '');
-  await page.selectOption('#policies-nb', 'new');
+  // the quick choices, each with how many it shows
+  assert.equal(await text(page, '#policies-show-new .n'), String(expected.newBusiness));
+  await page.click('#policies-show-new');
   assert.equal(await count(), expected.newBusiness);
-  await page.selectOption('#policies-nb', '');
-  await page.selectOption('#policies-state', 'renewed');
-  assert.equal(await count(), expected.renewalsInFile);
-  await page.selectOption('#policies-state', '');
+  await page.click('#policies-show-due');
+  assert.equal(await count(), expected.dueIn30Days);
+  await page.click('#policies-show-all');
   await page.fill('#policies-q', '34 kma 482');
   await page.waitForFunction(() => document.querySelectorAll('.tableview tbody tr').length === 2);
   await page.fill('#policies-q', '');
-  await page.selectOption('#policies-pay', 'account');
-  const withAccount = await count();
+  await page.selectOption('#policies-company', 'allianz');
+  await page.click('#policies-show-renewal');
+  const shown = await count();
+  assert.equal(await text(page, '#policies-show-renewal .n'), String(shown), 'the choices count within the other filters');
   const file = await download(page, () => page.click('#policies-export'));
   const rows = sheetRows(readBook(file.bytes), 'Poliçeler');
-  assert.equal(rows.length, withAccount + 1, 'exports the filtered rows');
-  await page.click('button:has-text("Filtreleri temizle")');
+  assert.equal(rows.length, shown + 1, 'exports the filtered rows');
+  await page.click('#policies-clear');
   assert.equal(await count(), expected.totalPolicies);
 });
 
@@ -128,7 +130,7 @@ test('reports: totals, date range and Excel report', async () => {
   await page.selectOption('#rep-from', '');
   await page.selectOption('#rep-to', '');
   assert.match(await text(page, '#rep-retention'), /Ekim 2026/);
-  assert.ok((await page.$$('#rep-opps tbody tr')).length > 0, 'cross-sell list');
+  assert.equal(await page.$('#rep-opps'), null, 'the cross-sell list has its own page');
 });
 
 test('deleting a month needs the month name typed', async () => {

@@ -18,23 +18,26 @@
   };
 
   // ------------------------------------------------------------------ policies list
+  // the quick choices above the list: what YENİ İŞ says, or where the policy stands
+  var SHOWS = [
+    { key: '', label: 'policies.show.all' },
+    { key: 'new', label: 'kind.new', test: function (p) { return Portfolio.kindOf(p) === 'new'; } },
+    { key: 'renewal', label: 'kind.renewal', test: function (p) { return Portfolio.kindOf(p) === 'renewal'; } },
+    { key: 'ek', label: 'policies.show.ek', test: function (p) { var k = Portfolio.kindOf(p); return k === 'ek' || k === 'zeyil'; } },
+    { key: 'due', label: 'policies.show.due', test: function (p, info) { return info && info.state === 'due'; } },
+    { key: 'expired', label: 'policies.show.expired', test: function (p, info) { return info && info.state === 'expired'; } },
+    { key: 'cancelled', label: 'policies.show.cancelled', test: function (p, info) { return info && info.state === 'cancelled'; } }
+  ];
+
+  /** The policies the search and the three lists (month, company, branch) leave. */
   function filterPolicies(vs) {
     var d = Store.derived();
     var q = U.collapse(vs.q);
     var fq = U.fold(q), qn = fq.replace(/ /g, ''), qp = U.plateKey(q);
     return d.policies.filter(function (p) {
-      if (vs.from && p.month < vs.from) return false;
-      if (vs.to && p.month > vs.to) return false;
+      if (vs.month && p.month !== vs.month) return false;
       if (vs.company && (!p.company || U.companyKey(p.company) !== vs.company)) return false;
       if (vs.cat && Schema.categoryOf(p.policyType) !== vs.cat) return false;
-      if (vs.nb && Portfolio.kindOf(p) !== vs.nb) return false; // what the YENİ İŞ cell says
-      if (vs.pay && !(p[vs.pay] > 0)) return false;
-      if (vs.state) {
-        var info = d.renewal.get(p.id);
-        var st = info ? info.state : 'none';
-        if (vs.state === 'active' && !(st === 'active' || st === 'due' || (st === 'short' && p.endDate >= d.today))) return false;
-        if (vs.state !== 'active' && st !== vs.state) return false;
-      }
       if (q.length >= 2) {
         var c = Store.customers.get(p.customerId);
         var hay = U.fold([c ? c.name : '', p.policyType, p.company, p.insuredName, p.note].join(' '));
@@ -46,6 +49,12 @@
       }
       return true;
     });
+  }
+  function showFilter(list, key) {
+    var sh = SHOWS.filter(function (x) { return x.key === key; })[0];
+    if (!sh || !sh.test) return list;
+    var d = Store.derived();
+    return list.filter(function (p) { return sh.test(p, d.renewal.get(p.id)); });
   }
 
   function policyColumns(vs, opts) {
@@ -92,7 +101,7 @@
     title: function () { return t('nav.policies'); },
     sub: function () { return t('policies.sub', { n: F.num(Store.derived().policies.length) }); },
     render: function () {
-      var vs = App.viewState.policies = Object.assign({ q: '', from: '', to: '', company: '', cat: '', nb: '', pay: '', state: '', sortKey: 'month', sortDir: -1 }, App.viewState.policies || {});
+      var vs = App.viewState.policies = Object.assign({ q: '', month: '', company: '', cat: '', show: '', sortKey: 'month', sortDir: -1 }, App.viewState.policies || {});
       if (!Store.policies.size) {
         return h('section', { class: 'card' }, UI.empty({ icon: 'file-text', title: t('policies.emptyTitle'), text: t('policies.emptyText'),
           actions: [h('a', { class: 'btn btn-primary', href: '#ice-aktar' }, icon('upload'), t('nav.import')), h('a', { class: 'btn', href: '#yeni' }, icon('plus'), t('nav.newRecord'))] }));
@@ -112,26 +121,32 @@
         empty: UI.empty({ icon: 'search', title: t('policies.noMatch'), text: t('customers.noMatchText') })
       });
       var current = [];
+      var chips = h('div', { class: 'chips-row', id: 'policies-show', role: 'group', 'aria-label': t('policies.show') });
+      var clear = h('button', { type: 'button', class: 'btn btn-sm btn-ghost', id: 'policies-clear', onClick: function () {
+        App.viewState.policies = { sortKey: vs.sortKey, sortDir: vs.sortDir };
+        App.refresh();
+      } }, icon('filter-x'), t('common.clearFilters'));
       function apply() {
-        current = filterPolicies(vs);
+        var base = filterPolicies(vs);
+        current = showFilter(base, vs.show);
         table.setRows(current);
         count.textContent = t('policies.count', { n: F.num(current.length) });
+        clear.hidden = !(vs.q || vs.month || vs.company || vs.cat || vs.show);
+        // each choice with how many it would show
+        UI.clear(chips);
+        SHOWS.forEach(function (x) {
+          chips.appendChild(h('button', { type: 'button', class: 'filter-chip', id: 'policies-show-' + (x.key || 'all'), 'aria-pressed': String((vs.show || '') === x.key),
+            onClick: function () { vs.show = x.key; apply(); } }, t(x.label), h('span', { class: 'n' }, F.num(showFilter(base, x.key).length))));
+        });
       }
-      var months = App.monthOptions(t('policies.anyMonth'));
       var toolbar = h('div', { class: 'toolbar' },
-        h('div', { class: 'search-local' }, icon('search'), h('input', { type: 'search', id: 'policies-q', value: vs.q, placeholder: t('policies.searchPh'), 'aria-label': t('policies.searchPh'), autocomplete: 'off', onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) })),
-        h('label', { class: 'small muted', for: 'policies-from' }, t('common.from')),
-        UI.select('policies-from', months, vs.from, { onChange: function (e) { vs.from = e.target.value; apply(); } }),
-        h('label', { class: 'small muted', for: 'policies-to' }, t('common.to')),
-        UI.select('policies-to', months, vs.to, { onChange: function (e) { vs.to = e.target.value; apply(); } }));
-      var toolbar2 = h('div', { class: 'toolbar' },
+        h('div', { class: 'search-local grow' }, icon('search'), h('input', { type: 'search', id: 'policies-q', value: vs.q, placeholder: t('policies.searchPh'), 'aria-label': t('policies.searchPh'), autocomplete: 'off',
+          onInput: U.debounce(function (e) { vs.q = e.target.value; apply(); }, 120) })),
+        UI.select('policies-month', App.monthOptions(t('policies.anyMonth')), vs.month, { onChange: function (e) { vs.month = e.target.value; apply(); }, 'aria-label': t('common.month') }),
         UI.select('policies-company', App.companyOptions(), vs.company, { onChange: function (e) { vs.company = e.target.value; apply(); }, 'aria-label': t('field.company') }),
         UI.select('policies-cat', App.categoryOptions(), vs.cat, { onChange: function (e) { vs.cat = e.target.value; apply(); }, 'aria-label': t('report.category') }),
-        UI.select('policies-nb', [{ value: '', label: t('policies.nbAll') }].concat(App.KINDS.map(function (k) { return { value: k.key, label: t('kind.' + k.key) }; })), vs.nb, { onChange: function (e) { vs.nb = e.target.value; apply(); }, 'aria-label': t('field.newBusiness') }),
-        UI.select('policies-pay', [{ value: '', label: t('policies.payAll') }, { value: 'card', label: t('field.card') }, { value: 'cash', label: t('field.cash') }, { value: 'account', label: t('field.account') }], vs.pay, { onChange: function (e) { vs.pay = e.target.value; apply(); }, 'aria-label': t('policies.payment') }),
-        UI.select('policies-state', [{ value: '', label: t('policies.stateAll') }, { value: 'active', label: t('state.active') }, { value: 'due', label: t('state.due') }, { value: 'expired', label: t('state.expired') }, { value: 'renewed', label: t('state.renewed') }, { value: 'lost', label: t('state.lost') }, { value: 'cancelled', label: t('state.cancelled') }], vs.state, { onChange: function (e) { vs.state = e.target.value; apply(); }, 'aria-label': t('renewals.status') }),
-        h('button', { type: 'button', class: 'btn btn-sm btn-ghost', onClick: function () { App.viewState.policies = { sortKey: vs.sortKey, sortDir: vs.sortDir }; App.refresh(); } }, icon('filter-x'), t('common.clearFilters')),
-        h('span', { class: 'spacer' }), count,
+        clear);
+      var toolbar2 = h('div', { class: 'toolbar' }, chips, h('span', { class: 'spacer' }), count,
         h('button', { type: 'button', class: 'btn btn-sm', id: 'policies-export', onClick: function () { App.exportPolicyList(current, 'police-listesi'); } }, icon('file-down'), t('common.exportExcel')));
       apply();
       return h('div', { class: 'stack' }, toolbar, toolbar2, h('section', { class: 'card', style: { overflow: 'hidden' } }, table.el));

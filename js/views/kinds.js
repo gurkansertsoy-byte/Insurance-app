@@ -111,19 +111,20 @@
       });
       endorse.sort(function (a, b) { return U.cmp(b.q.month, a.q.month); });
       var refund = U.round2(U.sum(all, Store.refundOf)), reclaim = U.round2(U.sum(all, Store.reclaimOf));
-      var kpis = h('section', { class: 'card kpis k4' },
+      var asking = d.questions.length > 0;
+      var kpis = h('section', { class: 'card kpis ' + (asking ? 'k4' : 'k3') },
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('ban'), t('cancels.kpiCount')), h('div', { class: 'kpi-value', id: 'cancels-count' }, F.num(all.length)),
           h('div', { class: 'kpi-sub' }, t('cancels.kpiCountSub', { b: F.num(filters.block.length), r: F.num(rowsKind.length) }))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('hand-coins'), t('cancels.kpiRefund')), h('div', { class: 'kpi-value', id: 'cancels-refund', title: F.money(refund) }, F.moneyC(refund)),
           h('div', { class: 'kpi-sub' }, t('cancels.kpiRefundSub'))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('badge-percent'), t('cancels.kpiReclaim')), h('div', { class: 'kpi-value', id: 'cancels-reclaim', title: F.money(reclaim) }, F.moneyC(reclaim)),
           h('div', { class: 'kpi-sub' }, t('cancels.kpiReclaimSub'))),
-        h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('circle-help'), t('cancels.kpiQuestions')), h('div', { class: 'kpi-value', id: 'cancels-questions' }, F.num(d.questions.length)),
-          h('div', { class: 'kpi-sub' }, d.questions.length ? t('cancels.kpiQuestionsSub') : t('cancels.noQuestions'))));
-      var ask = h('section', { class: 'card', id: 'cancel-questions' },
+        asking ? h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, icon('circle-help'), t('cancels.kpiQuestions')), h('div', { class: 'kpi-value', id: 'cancels-questions' }, F.num(d.questions.length)),
+          h('div', { class: 'kpi-sub' }, t('cancels.kpiQuestionsSub'))) : null);
+      // the questions, only while some are waiting: once every row is answered the section goes away
+      var ask = asking ? h('section', { class: 'card', id: 'cancel-questions' },
         h('div', { class: 'card-head' }, h('h2', null, t('repeat.title')), h('span', { class: 'sub' }, t('repeat.sub'))),
-        h('div', { class: 'card-body' }, d.questions.length ? App.repeatQuestions(d.questions.slice().sort(function (a, b) { return U.cmp(a.month, b.month); }))
-          : h('p', { class: 'muted small' }, t('repeat.none'))));
+        h('div', { class: 'card-body' }, App.repeatQuestions(d.questions.slice().sort(function (a, b) { return U.cmp(a.month, b.month); })))) : null;
       var chips = h('div', { class: 'actions' }, ['all', 'block', 'row', 'open'].map(function (k) {
         return h('button', { type: 'button', class: 'filter-chip', id: 'cancels-f-' + k, 'aria-pressed': String(vs.filter === k), onClick: function () { vs.filter = k; App.refresh(); } },
           t('cancels.f.' + k), h('span', { class: 'n' }, F.num(filters[k].length)));

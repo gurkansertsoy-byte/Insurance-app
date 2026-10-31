@@ -842,6 +842,18 @@
     res.customersAdded.forEach(function (c) { c.createdBy = importId; });
     // İptal rows, then find the policy each one cancels
     var cres = importCancels((opts.cancels || []).filter(keptCancel), { importId: importId, fileName: opts.fileName || '', now: now, anchors: hints && hints.cancelAnchors, keep: hints && hints.cancelKeep });
+    // the same file read again: İptal rows an earlier reading found on these pages and this one does not (no longer
+    // in the file, or read by mistake before) go, unless the user chose their policy
+    var staleCancels = [];
+    if (!hints && opts.fileName && analysis) {
+      var seen = new Set(cres.rows.map(function (o) { return o.x.id; }));
+      var pages = new Set(analysis.sheets.filter(function (s) { return s.include; }).map(function (s) { return s.name; }));
+      Store.cancellations.forEach(function (x) {
+        var src = x.source || {};
+        if (src.type === 'import' && src.file === opts.fileName && pages.has(src.sheet) && !seen.has(x.id) && !x.locked) staleCancels.push(x.id);
+      });
+      staleCancels.forEach(function (id) { Store.cancellations.delete(id); });
+    }
     var relinked = relink();
     // which row of the file became which İptal record (to write them back to the same rows)
     res.cancelsPlaced = cres.rows.map(function (o) { return { sheet: o.rec.sheet, row: o.rec.row, id: o.x.id }; });
@@ -885,6 +897,7 @@
         putMeta('months'),
         putMeta('imports')
       ];
+      if (staleCancels.length) del('cancellations', staleCancels);
       Store.log({ type: 'import', text: entry.file, importId: importId, count: entry.added });
       emit();
       return Promise.all(ps).then(function () { return { result: res, entry: entry }; });

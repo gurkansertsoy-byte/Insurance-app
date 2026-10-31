@@ -200,7 +200,7 @@
       return h('tr', { id: 'cx-' + x.id, class: x.kind === 'row' ? 'cancel-row-kind' : null },
         withMonth ? h('td', { 'data-label': L.month, style: { whiteSpace: 'nowrap' } }, h('a', { href: '#ay-' + x.month }, F.month(x.month, true))) : null,
         h('td', { 'data-label': L.company }, x.company || '—'),
-        h('td', { 'data-label': L.policy }, x.policyText || '—', x.kind === 'row' && x.policyNo ? h('div', { class: 'small muted mono' }, x.policyNo) : null),
+        h('td', { 'data-label': L.policy }, x.policyText || '—', x.kind === 'row' && x.policyNo ? h('div', { class: 'small muted mono', style: { whiteSpace: 'nowrap' } }, x.policyNo) : null),
         h('td', { class: 'name-cell' }, x.insuredName || '—'),
         split ? h('td', { class: 'r num', 'data-label': L.card }, x.card ? F.money(x.card) : '') : null,
         split ? h('td', { class: 'r num', 'data-label': L.account }, x.account ? F.money(x.account) : '') : null,

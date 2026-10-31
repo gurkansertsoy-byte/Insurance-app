@@ -222,7 +222,6 @@
         var ps = list.filter(function (p) { return p[x[0]] > 0; });
         return { key: x[0], label: t(x[1]), n: ps.length, v: tot[x[0]] };
       });
-      var accPaid = U.sum(list, Portfolio.paidOnAccount);
       var payCard = h('section', { class: 'card', id: 'rep-payments' }, h('div', { class: 'card-head' }, h('h2', null, t('dash.payments'))),
         h('div', { class: 'card-body stack' }, Charts.stackBar({ parts: payParts, format: function (v) { return F.money0(v); } }),
           Charts.miniTable([
@@ -231,7 +230,6 @@
             { label: t('common.amount'), align: 'r', value: function (r) { return F.money(r.v); } },
             { label: t('report.share'), align: 'r', value: function (r) { return F.pct(tot.premium ? r.v / tot.premium : null); } }
           ], payRows),
-          tot.account ? h('p', { class: 'small dim' }, t('reports.accountLine', { paid: F.money(accPaid), open: F.money(U.round2(U.sum(list, Store.outstanding))) }), ' ', h('a', { href: '#tahsilat' }, t('nav.collections'))) : null,
           Math.abs(unpaid) >= 1 ? h('p', { class: 'small muted' }, t('reports.unassigned', { v: F.money(unpaid) })) : null));
       var profs = Portfolio.aggregate(list.map(function (p) { var c = Store.customers.get(p.customerId); return Object.assign({}, p, { _prof: c && c.profession }); }), function (p) { return p._prof || ''; });
       var profCard = h('section', { class: 'card', id: 'rep-profession' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.byProfession')), h('span', { class: 'sub' }, t('reports.top', { n: 10 }))),
@@ -263,23 +261,6 @@
           { label: t('reports.notRenewed'), align: 'r', value: function (r) { return F.num(r.open); } },
           { label: t('reports.rate'), align: 'r', value: function (r) { return F.pct(r.n ? r.renewed / r.n : null, 0); } }
         ], expRows) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('reports.noRetention'))));
-      // cross-sell list
-      var opps = [];
-      Store.customers.forEach(function (c) { Portfolio.opportunities(c, Store.policiesOf(c.id), d.today).forEach(function (o) { opps.push({ c: c, o: o }); }); });
-      opps.sort(function (a, b) { return U.cmp(a.o.type, b.o.type) || U.cmp(a.c.name, b.c.name); });
-      var oppTable = new UI.TableView({
-        rows: opps, pageSize: 15,
-        columns: [
-          { key: 'type', label: t('reports.oppType'), sort: function (x) { return x.o.type; }, render: function (x) { return h('span', { class: 'row tight' }, icon('lightbulb'), t('opp.' + x.o.type + '.title')); } },
-          { key: 'c', label: t('common.customer'), cls: 'name-cell', sort: function (x) { return x.c.name; }, render: function (x) { return h('a', { href: '#musteri-' + x.c.id, style: { color: 'inherit' } }, x.c.name); } },
-          { key: 'plate', label: t('field.plate'), render: function (x) { return x.o.plate ? UI.plate(x.o.plate) : '—'; } },
-          { key: 'phone', label: t('field.phone'), render: function (x) { return App.phoneLinks(x.c.phone); } },
-          { key: 'act', label: '', cls: 'actions-cell', render: function (x) { return h('button', { type: 'button', class: 'btn btn-sm', onClick: function () { App.editTask({ customerId: x.c.id, title: t('opp.' + x.o.type + '.task', { plate: x.o.plate || '', name: x.c.name }), due: U.addDays(d.today, 2) }); } }, icon('list-checks'), t('customer.makeTask')); } }
-        ]
-      });
-      var oppCard = h('section', { class: 'card', id: 'rep-opps', style: { overflow: 'hidden' } }, h('div', { class: 'card-head' }, h('h2', null, t('dash.opportunities')), h('span', { class: 'sub' }, t('reports.oppSub', { n: F.num(opps.length) }))),
-        h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, opps.length ? oppTable.el : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('customer.noOpps'))));
-
       // cancellations (İptal blocks of the months)
       var cancelRows = cancelRowsByMonth(filteredCancels(vs), list);
       var cancelCard = h('section', { class: 'card', id: 'rep-cancels' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.cancelTitle')), h('span', { class: 'sub' }, t('reports.cancelSub'))),
@@ -302,9 +283,9 @@
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiPremium')), h('div', { class: 'kpi-value', id: 'rep-premium', title: F.money(tot.premium) }, F.money0(tot.premium))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCommission')), h('div', { class: 'kpi-value', id: 'rep-commission', title: F.money(tot.commission) }, F.money0(tot.commission))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('report.commRate')), h('div', { class: 'kpi-value' }, F.pct(tot.premium ? tot.commission / tot.premium : null))),
-        h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCustomers')), h('div', { class: 'kpi-value' }, F.num(tot.customerCount))));
+        h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCustomers')), h('div', { class: 'kpi-value', id: 'rep-customers' }, F.num(App.customersOf(filtered(vs, true), !vs.from && !vs.to && !vs.company && !vs.cat).size))));
       var node = h('div', { class: 'stack' }, filters, summary, monthly, newRen, h('div', { class: 'grid-2' }, companyCard, catCard),
-        h('div', { class: 'grid-2' }, payCard, profCard), topCard, retCard, cancelCard, oppCard);
+        h('div', { class: 'grid-2' }, payCard, profCard), topCard, retCard, cancelCard);
       if (App.viewState.reportsFocus) {
         var focus = App.viewState.reportsFocus;
         App.viewState.reportsFocus = null;

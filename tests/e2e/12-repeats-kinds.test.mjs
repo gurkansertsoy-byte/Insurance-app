@@ -120,7 +120,9 @@ test('plus amounts: the app asks; yes makes a cancellation, no keeps a policy, a
   await page.click('#rq-no-' + b.id);
   await page.waitForSelector('#rq-' + b.id, { state: 'detached' });
   assert.equal(await badge(page), '');
-  assert.match(await text(page, '#cancel-questions'), /Cevap bekleyen satır yok/);
+  // every row answered: the questions section and its box go away
+  await page.waitForSelector('#cancel-questions', { state: 'detached' });
+  assert.equal(await page.$('#cancels-questions'), null);
   assert.equal(await store(page, (id) => Store.isCancelled(id), bBase.id), false);
   assert.equal(await counted(page), before - 1);
 
@@ -225,11 +227,11 @@ test('no commission written: 10 % of the premium for Trafik, 15 % for anything e
 test('the policy list filters by what the YENİ İŞ cell says', async () => {
   const { page } = env;
   await go(page, 'policeler');
-  for (const [k, n] of [['ek', kindTotal('ek')], ['zeyil', kindTotal('zeyil')]]) {
-    await page.selectOption('#policies-nb', k);
+  for (const [k, n] of [['new', kindTotal('new')], ['ek', kindTotal('ek') + kindTotal('zeyil')]]) {
+    await page.click('#policies-show-' + k);
     assert.equal(await text(page, '#policies-count'), num(n) + ' poliçe', k);
   }
-  await page.selectOption('#policies-nb', '');
+  await page.click('#policies-show-all');
   assert.equal(await text(page, '#policies-count'), num(expected.totalPolicies) + ' poliçe');
 });
 

@@ -1,58 +1,33 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setup, waitHash, loadDemo, go, text, expected, store, money, confirmDialog } from './helpers.mjs';
+import { setup, waitHash, loadDemo, go, text, expected, store, money, confirmDialog } from './helpers.mjs'; // eslint-disable-line no-unused-vars
 
 let env;
 test.before(async () => { env = await setup(); await loadDemo(env.page, env.base); });
 test.after(async () => { await env.close(); });
 
-test('collections list shows every open on-account balance', async () => {
+test('no Tahsilat (cari) page any more; a payment can still be noted on the customer card', async () => {
   const { page } = env;
+  assert.equal(await page.$('nav a[href="#tahsilat"]'), null, 'not in the menu');
   await go(page, 'tahsilat');
-  assert.equal(await text(page, '#collections-total'), money(expected.totalOutstanding));
-  const open = await store(page, () => Array.from(Store.policies.values()).filter(p => Store.outstanding(p) > 0).length);
-  assert.match(await text(page, 'tfoot'), new RegExp(open + ' poliçe'));
-  const first = await page.$$eval('.tableview tbody tr td:nth-child(6)', tds => tds.slice(0, 3).map(t => t.textContent));
-  assert.ok(first.length === 3, 'largest balances first');
-});
-
-test('a partial payment lowers the balance; a full payment closes it', async () => {
-  const { page } = env;
+  assert.equal(await text(page, '#page-title'), 'Gösterge paneli', 'the old address opens the dashboard');
   const top = await store(page, () => {
     const p = Array.from(Store.policies.values()).filter(x => x.account > 0).sort((a, b) => b.account - a.account)[0];
-    return { id: p.id, account: p.account };
+    return { id: p.id, account: p.account, customerId: p.customerId };
   });
-  await page.click('#pay-' + top.id);
+  await go(page, 'musteri-' + top.customerId);
+  await page.click('#tab-payments');
+  await page.click('.tabs ~ * button:has-text("Tahsilat gir")');
   await page.waitForSelector('dialog[open] #pay-amount');
-  assert.equal(await page.inputValue('#pay-amount'), new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(top.account), 'defaults to the remaining amount');
   await page.fill('#pay-amount', '0');
   await page.click('#pay-save');
   assert.match(await text(page, 'dialog[open] .hint.bad'), /sıfırdan büyük/);
   await page.fill('#pay-amount', '10.000,00');
-  await page.selectOption('#pay-method', 'card');
   await page.fill('#pay-note', 'İlk taksit');
   await page.click('#pay-save');
   await page.waitForSelector('dialog[open]', { state: 'detached' });
-  assert.equal(await text(page, '#collections-total'), money(expected.totalOutstanding - 10000));
-  assert.match(await text(page, '.kpi:nth-child(2) .kpi-value'), new RegExp(money(10000).replace('.', '\\.')), 'collected this month');
-  assert.match(await text(page, 'section.card:has(h2:has-text("Son tahsilatlar"))'), /İlk taksit/);
-  await page.click('#pay-' + top.id);
-  await page.click('#pay-save');
-  await page.waitForSelector('dialog[open]', { state: 'detached' });
-  assert.equal(await store(page, (id) => Portfolio.outstanding(Store.policies.get(id)), top.id), 0);
-  assert.equal(await page.$('#pay-' + top.id), null, 'gone from open balances');
-  await page.click('#coll-paid');
-  assert.match(await text(page, '.tableview'), /Ödendi/);
-  // the customer card shows the payments too
-  const cid = await store(page, (id) => Store.policies.get(id).customerId, top.id);
-  await go(page, 'musteri-' + cid);
-  await page.click('#tab-payments');
+  assert.equal(await store(page, (id) => Portfolio.paidOnAccount(Store.policies.get(id)), top.id), 10000);
   assert.match(await text(page, '.tabs ~ *'), /İlk taksit/);
-  // removing a payment reopens the balance
-  await go(page, 'tahsilat');
-  await page.click('section.card:has(h2:has-text("Son tahsilatlar")) .list-item >> nth=0 >> button');
-  await confirmDialog(page);
-  assert.ok(await store(page, (id) => Portfolio.outstanding(Store.policies.get(id)), top.id) > 0);
 });
 
 test('tasks: quick add, complete, edit to overdue, delete with undo', async () => {

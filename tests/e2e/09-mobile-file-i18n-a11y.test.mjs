@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { setup, waitHash, loadDemo, go, text, expected, store, readBook, sheetRows, ROOT } from './helpers.mjs';
 
-const PAGES = ['panel', 'musteriler', 'policeler', 'aylar', 'ay-2026-10', 'iptaller', 'yenilemeler', 'tahsilat', 'gorevler', 'raporlar', 'ice-aktar', 'ayarlar', 'yeni'];
+const PAGES = ['panel', 'musteriler', 'policeler', 'aylar', 'ay-2026-10', 'iptaller', 'yenilemeler', 'gorevler', 'firsatlar', 'raporlar', 'ice-aktar', 'ayarlar', 'yeni'];
 const KEY_RE = /\b(app|nav|common|field|id|search|period|days|state|chart|table|dash|opp|customers|customer|policy|form|policies|pay|months|renewals|collections|tasks|reports|report|export|import|dup|activity|settings)\.[a-z][a-zA-Z0-9]*(\.[a-zA-Z0-9]+)?\b/;
 
 test('phone screen: no sideways scrolling, menu drawer, tables become cards', async () => {

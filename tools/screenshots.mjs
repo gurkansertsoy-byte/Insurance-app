@@ -155,13 +155,8 @@ async function desktop() {
     await go(page, 'yenilemeler');
     await snap(page, '16-renewals');
 
-    await go(page, 'tahsilat');
-    await snap(page, '17-collections');
-    const top = await page.evaluate(() => Array.from(Store.policies.values()).filter(p => Portfolio.outstanding(p) > 0).sort((a, b) => Portfolio.outstanding(b) - Portfolio.outstanding(a))[0].id);
-    await page.click('#pay-' + top);
-    await page.waitForSelector('dialog[open] #pay-amount');
-    await snap(page, '18-payment');
-    await page.keyboard.press('Escape');
+    await go(page, 'firsatlar');
+    await snap(page, '17-cross-sell');
 
     await go(page, 'gorevler');
     await snap(page, '19-tasks');

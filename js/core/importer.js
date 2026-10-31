@@ -171,6 +171,26 @@
         if (kinds[c] !== 'company' || kinds[c + 1] !== 'policy' || kinds[c + 2] !== 'insured') continue;
         if (kinds.slice(c + 3, c + 6).sort().join() !== 'account,card,cash') continue;
         if (texts.slice(c + 6).some(Boolean)) continue;
+        // the main table can end with the same six titles (ŞİRKET | POLİÇE NO | SİGORTALI AD SOYAD | KART | CARİ |
+        // NAKİT). Right next to other titles they are the İptal block only when the table on their left has its own
+        // Kart / Cari / Nakit, or its own policy name and number; otherwise they are the table's own columns
+        if (c > 0 && texts[c - 1]) {
+          var left = {};
+          texts.slice(0, c).forEach(function (t) { var k = t && Schema.matchHeader(t); if (k) left[k] = true; });
+          if (!(left.card || left.account || left.cash)) {
+            if (!(left.policyType && left.policyNo)) continue;
+            // filled on (nearly) every row of the table, row by row: the table's own columns
+            var tableRows = 0, both = 0;
+            for (var rr = r + 1; rr < rows.length; rr++) {
+              var cells = rows[rr] || [];
+              var inLeft = cells.slice(0, c).some(function (v) { return !isEmpty(plain(v)); });
+              var inSix = cells.slice(c, c + 6).some(function (v) { return !isEmpty(plain(v)); });
+              if (inLeft) tableRows++;
+              if (inLeft && inSix) both++;
+            }
+            if (both >= 3 && both >= 0.8 * tableRows) continue;
+          }
+        }
         var colList = [c, c + 1, c + 2, c + 3, c + 4, c + 5];
         return { headerRow: r, startCol: c, colList: colList, kinds: kinds.slice(c, c + 6), headers: texts.slice(c, c + 6) };
       }
@@ -346,6 +366,8 @@
     var whoCols = ['name', 'insuredName', 'tc', 'policyNo', '_first'].some(function (f) { return mapped[f]; });
     if ((!policyCols || !whoCols) && !block) { res.include = false; res.warnings.push('notPolicySheet'); }
     else if (!res.month.key) res.warnings.push('noMonth');
+    // a policy page without Kart / Cari / Nakit: say so, the column can be chosen by hand
+    if (res.include !== false && policyCols && !mapped.card && !mapped.account && !mapped.cash && res.rows.length) res.warnings.push('noPay');
     return res;
   }
 
@@ -471,6 +493,13 @@
     }
   }
 
+  var PAY_FIELDS = { card: true, account: true, cash: true };
+  function isPayMark(v) {
+    var p = plain(v);
+    if (typeof p !== 'string' || !p.trim()) return false;
+    return U.parseYesNo(p) === true || /^[✓✔☑x*+]+$/i.test(p.trim());
+  }
+
   function buildRecord(x, sheet, opts) {
     opts = opts || {};
     var fields = {};
@@ -505,6 +534,8 @@
         return;
       }
       var bad = parsed == null || parsed === '';
+      // Kart / Cari / Nakit ticked (X, ✓, EVET) instead of an amount: paid that way, the premium
+      if (bad && PAY_FIELDS[col.field] && isPayMark(v)) { (fields._paidBy = fields._paidBy || []).push(col.field); return; }
       if (bad) {
         // keep what could not be read instead of dropping it
         extras[col.header] = cellText(v, opts.lang);
@@ -514,6 +545,14 @@
       if (fields[col.field] == null || fields[col.field] === '') fields[col.field] = parsed;
       else if (String(fields[col.field]) !== String(parsed)) extras[col.header] = cellText(v, opts.lang);
     });
+    if (fields._paidBy) {
+      var by = fields._paidBy.filter(function (k) { return fields[k] == null; });
+      if (fields.premium > 0 && by.length) {
+        var share = U.round2(fields.premium / by.length);
+        by.forEach(function (k, i) { fields[k] = i === by.length - 1 ? U.round2(fields.premium - share * (by.length - 1)) : share; });
+      }
+      delete fields._paidBy;
+    }
     if (!fields.name && (first || last)) fields.name = U.tidyName((first + ' ' + last).trim());
     if (!fields.name && fields.insuredName) fields.name = fields.insuredName;
     if (fields._contactText) {

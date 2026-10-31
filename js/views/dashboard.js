@@ -14,6 +14,13 @@
   }
   App.periodMonths = periodMonths;
 
+  /** Customers of these rows; all customers on file when nothing narrows the view (so every screen counts alike). */
+  App.customersOf = function (rows, everyone) {
+    var ids = new Set(rows.map(function (p) { return p.customerId; }));
+    if (everyone) Store.customers.forEach(function (c) { ids.add(c.id); });
+    return ids;
+  };
+
   function periodOptions(months) {
     var years = Array.from(new Set(months.map(function (m) { return m.slice(0, 4); }))).sort().reverse();
     return [{ value: 'all', label: t('period.all') }, { value: '12', label: t('period.last', { n: 12 }) }, { value: '6', label: t('period.last', { n: 6 }) }, { value: '3', label: t('period.last', { n: 3 }) }]
@@ -99,21 +106,21 @@
       var monthMap = new Map(byMonth.map(function (r) { return [r.key, r]; }));
       var series = months.map(function (m) { return monthMap.get(m) || { key: m, premium: 0, commission: 0, count: 0, newCount: 0 }; });
       var multi = 0;
-      var custIds = new Set(list.map(function (p) { return p.customerId; }));
+      // the same count as the customer list: everyone for all periods, else whoever has a row (policy or
+      // cancellation) in the period
+      var custIds = App.customersOf(d.rows.filter(function (p) { return monthsSet.has(p.month); }), vs.period === 'all');
       custIds.forEach(function (id) { if (Store.summary(id).months.length > 1) multi++; });
       var due = 0, expired = 0;
       d.renewal.forEach(function (i) { if (i.state === 'due') due++; else if (i.state === 'expired' && i.daysLeft >= -60) expired++; });
       // İptal block rows and rows that cancel an earlier policy by writing its number again
       var cancelCount = Store.allCancels().filter(function (x) { return monthsSet.has(x.month); }).length;
-      var outstanding = 0, openCount = 0;
-      d.policies.forEach(function (p) { var o = Store.outstanding(p); if (o > 0) { outstanding += o; openCount++; } });
 
       var filters = h('div', { class: 'toolbar' },
         h('label', { class: 'muted small', for: 'dash-period' }, t('period.label')),
         UI.select('dash-period', periodOptions(d.months), vs.period, { onChange: function (e) { vs.period = e.target.value; App.refresh(); } }),
         h('span', { class: 'result-count' }, t('dash.periodInfo', { months: months.length, policies: F.num(tot.count) })));
 
-      var kpis = h('section', { class: 'card kpis', 'aria-label': t('dash.kpis') },
+      var kpis = h('section', { class: 'card kpis k5', 'aria-label': t('dash.kpis') },
         kpi({ id: 'kpi-premium', icon: 'banknote', label: t('dash.kpiPremium'), value: F.moneyC(tot.premium), title: F.money(tot.premium),
           sub: t('dash.avgMonth', { v: F.moneyC(months.length ? tot.premium / months.length : 0) }), spark: Charts.sparkline(series.map(function (s) { return s.premium; })) }),
         kpi({ id: 'kpi-commission', icon: 'badge-percent', label: t('dash.kpiCommission'), value: F.moneyC(tot.commission),
@@ -125,9 +132,7 @@
         kpi({ id: 'kpi-customers', icon: 'users', label: t('dash.kpiCustomers'), value: F.num(custIds.size), href: 'musteriler',
           sub: t('dash.multiMonth', { n: F.num(multi) }) }),
         kpi({ id: 'kpi-due', icon: 'calendar-clock', label: t('dash.kpiDue', { n: Store.settings.renewalWindow }), value: F.num(due), href: 'yenilemeler',
-          sub: expired ? h('span', null, UI.pill(t('dash.expiredN', { n: expired }), 'bad')) : t('dash.noneExpired') }),
-        kpi({ id: 'kpi-outstanding', icon: 'wallet', label: t('dash.kpiOutstanding'), value: F.moneyC(outstanding), title: F.money(outstanding), href: 'tahsilat',
-          sub: t('dash.openPolicies', { n: F.num(openCount) }) }));
+          sub: expired ? h('span', null, UI.pill(t('dash.expiredN', { n: expired }), 'bad')) : t('dash.noneExpired') }));
 
       // monthly production
       var metric = vs.metric;
@@ -248,7 +253,7 @@
       });
       var oppCard = h('section', { class: 'card', id: 'card-opps' },
         h('div', { class: 'card-head' }, h('h2', null, t('dash.opportunities')), h('span', { class: 'sub' }, t('dash.oppSub', { n: F.num(oppCustomers) })),
-          h('div', { class: 'actions' }, h('a', { class: 'btn btn-sm btn-ghost', href: '#raporlar', onClick: function () { App.viewState.reportsFocus = 'opps'; } }, t('common.viewAll'), icon('arrow-right')))),
+          h('div', { class: 'actions' }, h('a', { class: 'btn btn-sm btn-ghost', href: '#firsatlar', id: 'dash-opps-all' }, t('common.viewAll'), icon('arrow-right')))),
         h('div', { class: 'card-body flush', style: { marginTop: '8px' } }, h('div', { class: 'list' }, ['kasko', 'trafik', 'dask', 'konut'].map(function (k) {
           return h('div', { class: 'list-item' }, h('span', { class: 'avatar sm' }, icon(k === 'kasko' || k === 'trafik' ? 'car' : 'house')),
             h('div', { class: 'main' }, h('div', { class: 't' }, t('opp.' + k + '.title')), h('div', { class: 's' }, t('opp.' + k + '.why'))),
