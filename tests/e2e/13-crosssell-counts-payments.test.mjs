@@ -95,3 +95,38 @@ test('KART / CARİ / NAKİT at the end of the table, next to ŞİRKET | POLİÇE
   for (const v of ['₺20.000', '₺8.000', '₺1.500']) assert.ok(pay.includes(v), v + ' in Ödeme şekli: ' + pay);
   assert.deepEqual(env.errors, []);
 });
+
+test('Ödeme şekli: refunds of the İptal rows by KART / CARİ / NAKİT, and "Belli değil" for what no column says', async () => {
+  const { page } = env;
+  // a month whose policy rows have no payment columns; its İptal block refunds by card and one by nothing
+  const head = ['POLİÇE ADI', 'POLİÇE BİTİŞ TARİHİ', 'ADI SOYADI', 'İLETİŞİM', 'POLİÇE NUMARASI', 'ŞİRKET POLİÇE TUTARI', 'YENİ İŞ', 'KOMİSYON', 'ŞİRKET',
+    null, 'ŞİRKET', 'POLİÇE', 'SİGORTALI AD SOYAD', 'KART', 'CARİ', 'NAKİT'];
+  const file = writeBook('odemesiz.xlsx', [{ name: 'ARALIK 2026', rows: [head,
+    ['Kasko', '10.12.2027', 'Nil Er', '0533 222 00 01', 'AX-9100001', 30000, 'YENİ İŞ', 4500, 'Axa', null, 'Axa', 'KASKO', 'Ufuk Tan', 1200, null, null],
+    ['Trafik', '12.12.2027', 'Oya Kar', '0533 222 00 02', 'AZ-9100002', 9000, 'YENİLEME', 900, 'Allianz', null, 'Allianz', 'TRAFİK', 'Sena Ay', null, null, null],
+    // the first policy written again with a minus premium: cancelled, its refund has no payment column
+    ['Kasko', '10.12.2027', 'Nil Er', '0533 222 00 01', 'AX-9100001', -18000, 'İPTAL', -2700, 'Axa']] }]);
+  await store(page, () => { App.viewState.import = null; });
+  await go(page, 'ice-aktar');
+  await page.setInputFiles('#import-file', file);
+  await page.waitForSelector('#sheet-table');
+  await page.click('#import-run');
+  await page.waitForSelector('#import-done');
+  await go(page, 'raporlar');
+  await page.selectOption('#rep-from', '2026-12');
+  await page.selectOption('#rep-to', '2026-12');
+  const rows = await page.$$eval('#rep-payments tbody tr', trs => trs.map(tr => Array.from(tr.children).map(td => td.textContent.trim())));
+  assert.deepEqual(rows.map(r => r[0]), ['Kart', 'Nakit', 'Cari', 'Belli değil']);
+  // sales: nothing says how they were paid
+  assert.deepEqual(rows.map(r => r[2]), ['₺0,00', '₺0,00', '₺0,00', '₺39.000,00']);
+  // refunds: ₺1.200 by card from the İptal block; the empty İptal row and the minus row are "Belli değil"
+  assert.deepEqual(rows.map(r => [r[4], r[5]]), [['1', '₺1.200,00'], ['0', '₺0,00'], ['0', '₺0,00'], ['2', '₺18.000,00']]);
+  assert.match(await text(page, '#rep-payments tfoot'), /3\s*₺19\.200,00/);
+  assert.ok(await page.isVisible('#rep-pay-nocols'), 'says why the sales are "Belli değil"');
+  // the dashboard shows the same split, for the period
+  await go(page, 'panel');
+  await page.selectOption('#dash-period', 'y2026');
+  assert.match(await text(page, '#dash-pay-refunds'), /Belli değil/);
+  await page.selectOption('#dash-period', 'all');
+  assert.deepEqual(env.errors, []);
+});

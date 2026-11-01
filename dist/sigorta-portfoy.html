@@ -504,6 +504,7 @@ a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .toolbar .search-local { position: relative; flex: 1 1 260px; }
 .toolbar .search-local.grow { flex: 3 1 320px; }
 .chips-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .link-btn:hover { color: var(--accent); }
 .toolbar .search-local input { width: 100%; padding-left: 34px; }
@@ -6642,6 +6643,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'cancel.undoDecision': 'Kararı geri al', 'cancel.decisionUndone': 'Karar geri alındı; satır yeniden değerlendirildi',
     // the İptaller page
     'nav.cancels': 'İptaller',
+    'pay.unknown': 'Belli değil', 'pay.sales': 'Satış', 'pay.refunds': 'İade', 'pay.colCancels': 'İptal', 'pay.colRefund': 'İade tutarı', 'pay.colNet': 'Satış − iade',
+    'pay.sub': 'Satış ve iptal iadeleri, ödeme şekline göre', 'pay.noRefunds': 'Bu dönemde iade yok.',
+    'pay.note': 'Belli değil: satırda Kart, Cari veya Nakit olarak yazılmamış tutar. İPTAL bölümünde KART / CARİ / NAKİT boş bırakılan iadeler ve poliçe numarası tekrar yazılarak (eksi tutarla) yapılan iptallerin iadesi de buraya girer.',
+    'pay.noColumns': 'Aylık sayfalardaki poliçe satırlarında Kart / Cari / Nakit tutarı okunamadı (bu sütunlar yalnızca İPTAL bölümünde olabilir); satışların ödeme şekli bu yüzden belli değil.',
     'compare.title': '{m} ayı, yıllara göre', 'compare.sub': '{years} · prim, komisyon, müşteri ve poliçe sayısı', 'compare.oneYear': 'Dosyada bu ayın tek yılı var',
     'compare.oneYearNote': 'Önceki yılların {m} sayfaları dosyaya eklendikçe yıllar yan yana görünür.', 'compare.years': '{n} yıl',
     'compare.pickMonth': 'Karşılaştırılacak ay', 'compare.customers': 'Müşteri sayısı', 'compare.policies': 'Poliçe sayısı', 'compare.change': 'Prim değişimi',
@@ -7119,6 +7124,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'cancel.undoDecision': 'Undo my answer', 'cancel.decisionUndone': 'Answer undone; the row was read again',
     // the cancellations page
     'nav.cancels': 'Cancellations',
+    'pay.unknown': 'Not specified', 'pay.sales': 'Sales', 'pay.refunds': 'Refunds', 'pay.colCancels': 'Cancelled', 'pay.colRefund': 'Refunded', 'pay.colNet': 'Sales − refunds',
+    'pay.sub': 'Sales and cancellation refunds by payment method', 'pay.noRefunds': 'No refunds in this period.',
+    'pay.note': 'Not specified: an amount not written as Kart, Cari or Nakit. Refunds left blank under KART / CARİ / NAKİT in the İPTAL block, and refunds of cancellations made by writing the policy number again (with minus amounts), go here too.',
+    'pay.noColumns': 'No Kart / Cari / Nakit amounts were read on the policy rows of the monthly pages (these columns may only be in the İPTAL block), so the payment method of the sales is not specified.',
     'compare.title': '{m}, year by year', 'compare.sub': '{years} · premium, commission, customers and policies', 'compare.oneYear': 'The file has only one year of this month',
     'compare.oneYearNote': 'As earlier years’ {m} pages are added to the file, the years appear side by side.', 'compare.years': '{n} {n|year|years}',
     'compare.pickMonth': 'Month to compare', 'compare.customers': 'Customers', 'compare.policies': 'Policies', 'compare.change': 'Premium change',
@@ -8820,11 +8829,6 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
           ], cats);
         }
       });
-      var payParts = [
-        { label: t('field.card'), value: tot.card, color: 'var(--chart-1)' },
-        { label: t('field.cash'), value: tot.cash, color: 'var(--chart-2)' },
-        { label: t('field.account'), value: tot.account, color: 'var(--chart-3)' }
-      ];
       var newRen = [
         { label: t('common.newBusiness'), value: tot.newCount, color: 'var(--chart-1)' },
         { label: t('common.renewal'), value: tot.renewalCount, color: 'var(--chart-2)' }
@@ -8834,7 +8838,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
       var payCard = h('section', { class: 'card', id: 'card-payments' },
         h('div', { class: 'card-head' }, h('h2', null, t('dash.payments'))),
         h('div', { class: 'card-body stack' },
-          Charts.stackBar({ parts: payParts, format: function (v) { return F.moneyC(v); } }),
+          App.paymentBlock(App.paymentSplit(list, Store.allCancels().filter(function (x) { return monthsSet.has(x.month); })), { compact: true, id: 'dash-pay' }),
           h('hr', { class: 'divider' }),
           h('div', { class: 'eyebrow' }, t('dash.newVsRenewal')),
           Charts.stackBar({ parts: newRen, format: function (v) { return F.num(v); } })));
@@ -10866,6 +10870,72 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
   var U = window.U, UI = window.UI, Store = window.Store, Portfolio = window.Portfolio, Charts = window.Charts, App = window.App;
   var h = UI.h, t = UI.t, icon = UI.icon, F = UI.F;
 
+  // ------------------------------------------------------------------ payment method: sales and refunds
+  var PAY = [
+    { key: 'card', label: 'field.card', color: 'var(--chart-1)' },
+    { key: 'cash', label: 'field.cash', color: 'var(--chart-2)' },
+    { key: 'account', label: 'field.account', color: 'var(--chart-3)' },
+    { key: 'unknown', label: 'pay.unknown', color: 'var(--chart-muted)' }
+  ];
+
+  /**
+   * Sales (premium) and refunds (cancellations) by Kart / Nakit / Cari, and what no column says: "Belli değil".
+   * Rows: { key, label, color, n (policies), v (premium), xn (cancellations), xv (refunded), net }.
+   */
+  App.paymentSplit = function (policies, cancels) {
+    var by = {};
+    var rows = PAY.map(function (p) { var r = { key: p.key, label: t(p.label), color: p.color, n: 0, v: 0, xn: 0, xv: 0 }; by[p.key] = r; return r; });
+    policies.forEach(function (p) {
+      var paid = 0;
+      ['card', 'cash', 'account'].forEach(function (k) { var v = p[k] || 0; if (v > 0) { by[k].n++; by[k].v += v; paid += v; } });
+      var rest = U.round2((p.premium || 0) - paid);
+      if (rest >= 1) { by.unknown.n++; by.unknown.v += rest; }
+    });
+    (cancels || []).forEach(function (x) {
+      // an İptal row writes the refund under KART / CARİ / NAKİT; a cancelling row of the table often only has its
+      // minus premium, and an İptal row with nothing under the three columns says nothing either: "Belli değil"
+      var refund = Store.refundOf(x) || 0, given = 0;
+      ['card', 'cash', 'account'].forEach(function (k) { var v = Math.abs(x[k] || 0); if (v > 0) { by[k].xn++; by[k].xv += v; given += v; } });
+      var rest = U.round2(refund - given);
+      if (rest >= 1 || !given) { by.unknown.xn++; by.unknown.xv += Math.max(0, rest); }
+    });
+    rows.forEach(function (r) { r.v = U.round2(r.v); r.xv = U.round2(r.xv); r.net = U.round2(r.v - r.xv); });
+    // a policy paid two ways sits in two rows: the totals count each once
+    rows.policies = policies.length;
+    rows.cancels = (cancels || []).length;
+    return rows;
+  };
+
+  /** Card body: a bar for sales, a bar for refunds, and the table (full) or nothing more (compact, dashboard). */
+  App.paymentBlock = function (rows, o) {
+    o = o || {};
+    var fmt = o.compact ? function (v) { return F.moneyC(v); } : function (v) { return F.money0(v); };
+    var sales = U.sum(rows, function (r) { return r.v; }), refunds = U.sum(rows, function (r) { return r.xv; });
+    var known = U.sum(rows.filter(function (r) { return r.key !== 'unknown'; }), function (r) { return r.v; });
+    var salesBar = h('div', { id: (o.id || 'pay') + '-sales' }, h('div', { class: 'eyebrow' }, t('pay.sales')),
+      Charts.stackBar({ parts: rows.map(function (r) { return { label: r.label, value: r.v, color: r.color }; }), format: fmt }));
+    var refundBar = h('div', { id: (o.id || 'pay') + '-refunds' }, h('div', { class: 'eyebrow' }, t('pay.refunds')),
+      refunds > 0 || rows.some(function (r) { return r.xn; }) ? Charts.stackBar({ parts: rows.map(function (r) { return { label: r.label, value: r.xv, color: r.color }; }), format: fmt })
+        : h('p', { class: 'small muted' }, t('pay.noRefunds')));
+    // side by side on a wide card, one under the other on the dashboard
+    var out = o.compact ? [salesBar, refundBar] : [h('div', { class: 'grid-2', style: { gap: '18px 28px' } }, salesBar, refundBar)];
+    if (!o.compact) {
+      out.push(Charts.miniTable([
+        { label: t('collections.method'), value: function (r) { return h('span', { class: 'row tight' }, h('i', { class: 'legend-dot', style: { background: r.color } }), r.label); } },
+        { label: t('reports.policiesUsing'), align: 'r', value: function (r) { return F.num(r.n); } },
+        { label: t('pay.sales'), align: 'r', value: function (r) { return F.money(r.v); } },
+        { label: t('report.share'), align: 'r', value: function (r) { return F.pct(sales ? r.v / sales : null); } },
+        { label: t('pay.colCancels'), align: 'r', value: function (r) { return F.num(r.xn); } },
+        { label: t('pay.colRefund'), align: 'r', value: function (r) { return F.money(r.xv); } },
+        { label: t('pay.colNet'), align: 'r', value: function (r) { return h('strong', null, F.money(r.net)); } }
+      ], rows, [t('common.total'), F.num(rows.policies || 0), F.money(sales), '', F.num(rows.cancels || 0), F.money(refunds), F.money(U.round2(sales - refunds))]));
+    }
+    // the monthly pages carry no Kart / Cari / Nakit: say why everything is "Belli değil"
+    if (sales > 0 && !known) out.push(h('p', { class: 'small muted', id: (o.id || 'pay') + '-nocols' }, t('pay.noColumns')));
+    if (!o.compact) out.push(h('p', { class: 'small muted' }, t('pay.note')));
+    return out;
+  };
+
   var MEASURES = [
     { key: 'premium', label: 'dash.metric.premium', money: true },
     { key: 'commission', label: 'dash.metric.commission', money: true },
@@ -11466,21 +11536,9 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
       var catCard = Charts.card({ id: 'rep-card-category', title: t('dash.byCategory'),
         chart: function () { return Charts.hbars({ data: cats.map(function (r) { return { label: catLabel(r), value: r.premium, sub: F.num(r.count) + ' ' + t('report.pcs') }; }), format: function (v) { return F.moneyC(v); } }); },
         table: function () { return aggTable(cats, catLabel, t('report.category'), tot); } });
-      var payParts = [{ label: t('field.card'), value: tot.card, color: 'var(--chart-1)' }, { label: t('field.cash'), value: tot.cash, color: 'var(--chart-2)' }, { label: t('field.account'), value: tot.account, color: 'var(--chart-3)' }];
-      var unpaid = U.round2(tot.premium - tot.card - tot.cash - tot.account);
-      var payRows = [['card', 'field.card'], ['cash', 'field.cash'], ['account', 'field.account']].map(function (x) {
-        var ps = list.filter(function (p) { return p[x[0]] > 0; });
-        return { key: x[0], label: t(x[1]), n: ps.length, v: tot[x[0]] };
-      });
-      var payCard = h('section', { class: 'card', id: 'rep-payments' }, h('div', { class: 'card-head' }, h('h2', null, t('dash.payments'))),
-        h('div', { class: 'card-body stack' }, Charts.stackBar({ parts: payParts, format: function (v) { return F.money0(v); } }),
-          Charts.miniTable([
-            { label: t('collections.method'), value: function (r) { return r.label; } },
-            { label: t('reports.policiesUsing'), align: 'r', value: function (r) { return F.num(r.n); } },
-            { label: t('common.amount'), align: 'r', value: function (r) { return F.money(r.v); } },
-            { label: t('report.share'), align: 'r', value: function (r) { return F.pct(tot.premium ? r.v / tot.premium : null); } }
-          ], payRows),
-          Math.abs(unpaid) >= 1 ? h('p', { class: 'small muted' }, t('reports.unassigned', { v: F.money(unpaid) })) : null));
+      // sales and refunds by payment method, with what no column says
+      var payCard = h('section', { class: 'card', id: 'rep-payments' }, h('div', { class: 'card-head' }, h('h2', null, t('dash.payments')), h('span', { class: 'sub' }, t('pay.sub'))),
+        h('div', { class: 'card-body stack' }, App.paymentBlock(App.paymentSplit(list, filteredCancels(vs)), { id: 'rep-pay' })));
       var profs = Portfolio.aggregate(list.map(function (p) { var c = Store.customers.get(p.customerId); return Object.assign({}, p, { _prof: c && c.profession }); }), function (p) { return p._prof || ''; });
       var profCard = h('section', { class: 'card', id: 'rep-profession' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.byProfession')), h('span', { class: 'sub' }, t('reports.top', { n: 10 }))),
         h('div', { class: 'card-body' }, Charts.hbars({ data: profs.slice(0, 10).map(function (r) { return { label: r.key === '—' ? t('common.unknown') : r.key, value: r.premium, sub: F.num(r.customerCount) + ' ' + t('report.people') }; }), format: function (v) { return F.moneyC(v); } })));
@@ -11544,7 +11602,7 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('report.commRate')), h('div', { class: 'kpi-value' }, F.pct(tot.premium ? tot.commission / tot.premium : null))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCustomers')), h('div', { class: 'kpi-value', id: 'rep-customers' }, F.num(App.customersOf(filtered(vs, true), !vs.from && !vs.to && !vs.company && !vs.cat).size))));
       var node = h('div', { class: 'stack' }, filters, summary, monthly, newRen, h('div', { class: 'grid-2' }, companyCard, catCard),
-        h('div', { class: 'grid-2' }, payCard, profCard), topCard, retCard, cancelCard);
+        payCard, h('div', { class: 'grid-2' }, profCard, topCard), retCard, cancelCard);
       if (App.viewState.reportsFocus) {
         var focus = App.viewState.reportsFocus;
         App.viewState.reportsFocus = null;

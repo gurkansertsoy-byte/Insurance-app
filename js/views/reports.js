@@ -216,21 +216,9 @@
       var catCard = Charts.card({ id: 'rep-card-category', title: t('dash.byCategory'),
         chart: function () { return Charts.hbars({ data: cats.map(function (r) { return { label: catLabel(r), value: r.premium, sub: F.num(r.count) + ' ' + t('report.pcs') }; }), format: function (v) { return F.moneyC(v); } }); },
         table: function () { return aggTable(cats, catLabel, t('report.category'), tot); } });
-      var payParts = [{ label: t('field.card'), value: tot.card, color: 'var(--chart-1)' }, { label: t('field.cash'), value: tot.cash, color: 'var(--chart-2)' }, { label: t('field.account'), value: tot.account, color: 'var(--chart-3)' }];
-      var unpaid = U.round2(tot.premium - tot.card - tot.cash - tot.account);
-      var payRows = [['card', 'field.card'], ['cash', 'field.cash'], ['account', 'field.account']].map(function (x) {
-        var ps = list.filter(function (p) { return p[x[0]] > 0; });
-        return { key: x[0], label: t(x[1]), n: ps.length, v: tot[x[0]] };
-      });
-      var payCard = h('section', { class: 'card', id: 'rep-payments' }, h('div', { class: 'card-head' }, h('h2', null, t('dash.payments'))),
-        h('div', { class: 'card-body stack' }, Charts.stackBar({ parts: payParts, format: function (v) { return F.money0(v); } }),
-          Charts.miniTable([
-            { label: t('collections.method'), value: function (r) { return r.label; } },
-            { label: t('reports.policiesUsing'), align: 'r', value: function (r) { return F.num(r.n); } },
-            { label: t('common.amount'), align: 'r', value: function (r) { return F.money(r.v); } },
-            { label: t('report.share'), align: 'r', value: function (r) { return F.pct(tot.premium ? r.v / tot.premium : null); } }
-          ], payRows),
-          Math.abs(unpaid) >= 1 ? h('p', { class: 'small muted' }, t('reports.unassigned', { v: F.money(unpaid) })) : null));
+      // sales and refunds by payment method, with what no column says
+      var payCard = h('section', { class: 'card', id: 'rep-payments' }, h('div', { class: 'card-head' }, h('h2', null, t('dash.payments')), h('span', { class: 'sub' }, t('pay.sub'))),
+        h('div', { class: 'card-body stack' }, App.paymentBlock(App.paymentSplit(list, filteredCancels(vs)), { id: 'rep-pay' })));
       var profs = Portfolio.aggregate(list.map(function (p) { var c = Store.customers.get(p.customerId); return Object.assign({}, p, { _prof: c && c.profession }); }), function (p) { return p._prof || ''; });
       var profCard = h('section', { class: 'card', id: 'rep-profession' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.byProfession')), h('span', { class: 'sub' }, t('reports.top', { n: 10 }))),
         h('div', { class: 'card-body' }, Charts.hbars({ data: profs.slice(0, 10).map(function (r) { return { label: r.key === '—' ? t('common.unknown') : r.key, value: r.premium, sub: F.num(r.customerCount) + ' ' + t('report.people') }; }), format: function (v) { return F.moneyC(v); } })));
@@ -294,7 +282,7 @@
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('report.commRate')), h('div', { class: 'kpi-value' }, F.pct(tot.premium ? tot.commission / tot.premium : null))),
         h('div', { class: 'kpi' }, h('div', { class: 'kpi-label' }, t('dash.kpiCustomers')), h('div', { class: 'kpi-value', id: 'rep-customers' }, F.num(App.customersOf(filtered(vs, true), !vs.from && !vs.to && !vs.company && !vs.cat).size))));
       var node = h('div', { class: 'stack' }, filters, summary, monthly, newRen, h('div', { class: 'grid-2' }, companyCard, catCard),
-        h('div', { class: 'grid-2' }, payCard, profCard), topCard, retCard, cancelCard);
+        payCard, h('div', { class: 'grid-2' }, profCard, topCard), retCard, cancelCard);
       if (App.viewState.reportsFocus) {
         var focus = App.viewState.reportsFocus;
         App.viewState.reportsFocus = null;

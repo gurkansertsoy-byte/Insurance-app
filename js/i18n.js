@@ -386,6 +386,10 @@
     'cancel.undoDecision': 'Kararı geri al', 'cancel.decisionUndone': 'Karar geri alındı; satır yeniden değerlendirildi',
     // the İptaller page
     'nav.cancels': 'İptaller',
+    'pay.unknown': 'Belli değil', 'pay.sales': 'Satış', 'pay.refunds': 'İade', 'pay.colCancels': 'İptal', 'pay.colRefund': 'İade tutarı', 'pay.colNet': 'Satış − iade',
+    'pay.sub': 'Satış ve iptal iadeleri, ödeme şekline göre', 'pay.noRefunds': 'Bu dönemde iade yok.',
+    'pay.note': 'Belli değil: satırda Kart, Cari veya Nakit olarak yazılmamış tutar. İPTAL bölümünde KART / CARİ / NAKİT boş bırakılan iadeler ve poliçe numarası tekrar yazılarak (eksi tutarla) yapılan iptallerin iadesi de buraya girer.',
+    'pay.noColumns': 'Aylık sayfalardaki poliçe satırlarında Kart / Cari / Nakit tutarı okunamadı (bu sütunlar yalnızca İPTAL bölümünde olabilir); satışların ödeme şekli bu yüzden belli değil.',
     'compare.title': '{m} ayı, yıllara göre', 'compare.sub': '{years} · prim, komisyon, müşteri ve poliçe sayısı', 'compare.oneYear': 'Dosyada bu ayın tek yılı var',
     'compare.oneYearNote': 'Önceki yılların {m} sayfaları dosyaya eklendikçe yıllar yan yana görünür.', 'compare.years': '{n} yıl',
     'compare.pickMonth': 'Karşılaştırılacak ay', 'compare.customers': 'Müşteri sayısı', 'compare.policies': 'Poliçe sayısı', 'compare.change': 'Prim değişimi',
@@ -863,6 +867,10 @@
     'cancel.undoDecision': 'Undo my answer', 'cancel.decisionUndone': 'Answer undone; the row was read again',
     // the cancellations page
     'nav.cancels': 'Cancellations',
+    'pay.unknown': 'Not specified', 'pay.sales': 'Sales', 'pay.refunds': 'Refunds', 'pay.colCancels': 'Cancelled', 'pay.colRefund': 'Refunded', 'pay.colNet': 'Sales − refunds',
+    'pay.sub': 'Sales and cancellation refunds by payment method', 'pay.noRefunds': 'No refunds in this period.',
+    'pay.note': 'Not specified: an amount not written as Kart, Cari or Nakit. Refunds left blank under KART / CARİ / NAKİT in the İPTAL block, and refunds of cancellations made by writing the policy number again (with minus amounts), go here too.',
+    'pay.noColumns': 'No Kart / Cari / Nakit amounts were read on the policy rows of the monthly pages (these columns may only be in the İPTAL block), so the payment method of the sales is not specified.',
     'compare.title': '{m}, year by year', 'compare.sub': '{years} · premium, commission, customers and policies', 'compare.oneYear': 'The file has only one year of this month',
     'compare.oneYearNote': 'As earlier years’ {m} pages are added to the file, the years appear side by side.', 'compare.years': '{n} {n|year|years}',
     'compare.pickMonth': 'Month to compare', 'compare.customers': 'Customers', 'compare.policies': 'Policies', 'compare.change': 'Premium change',

@@ -224,11 +224,6 @@
           ], cats);
         }
       });
-      var payParts = [
-        { label: t('field.card'), value: tot.card, color: 'var(--chart-1)' },
-        { label: t('field.cash'), value: tot.cash, color: 'var(--chart-2)' },
-        { label: t('field.account'), value: tot.account, color: 'var(--chart-3)' }
-      ];
       var newRen = [
         { label: t('common.newBusiness'), value: tot.newCount, color: 'var(--chart-1)' },
         { label: t('common.renewal'), value: tot.renewalCount, color: 'var(--chart-2)' }
@@ -238,7 +233,7 @@
       var payCard = h('section', { class: 'card', id: 'card-payments' },
         h('div', { class: 'card-head' }, h('h2', null, t('dash.payments'))),
         h('div', { class: 'card-body stack' },
-          Charts.stackBar({ parts: payParts, format: function (v) { return F.moneyC(v); } }),
+          App.paymentBlock(App.paymentSplit(list, Store.allCancels().filter(function (x) { return monthsSet.has(x.month); })), { compact: true, id: 'dash-pay' }),
           h('hr', { class: 'divider' }),
           h('div', { class: 'eyebrow' }, t('dash.newVsRenewal')),
           Charts.stackBar({ parts: newRen, format: function (v) { return F.num(v); } })));
