@@ -181,6 +181,33 @@
     });
   };
 
+  // ------------------------------------------------------------------ the policies behind a renewal-rate number
+  App.renewalListDialog = function (title, list) {
+    var d = Store.derived();
+    var rows = list.slice().sort(function (a, b) { return U.cmp(a.endDate, b.endDate); });
+    var m = UI.modal({
+      title: title, icon: 'refresh-cw', size: 'wide',
+      body: [h('div', { class: 'table-wrap', id: 'renewal-list' }, h('table', { class: 'data' },
+        h('thead', null, h('tr', null, [t('common.customer'), t('field.policyType'), t('field.plate'), t('reports.soldIn'), t('field.endDate'), t('reports.renewalFound')].map(function (x) { return h('th', null, x); }))),
+        h('tbody', null, rows.map(function (p) {
+          var c = Store.customers.get(p.customerId);
+          var info = d.renewal.get(p.id) || {};
+          var s = info.successorId && Store.policies.get(info.successorId);
+          return h('tr', null,
+            h('td', null, h('a', { href: '#musteri-' + p.customerId, onClick: function () { m.close(); } }, c ? c.name : '—')),
+            h('td', null, p.policyType || '—', h('div', { class: 'row tight small muted', style: { columnGap: '8px' } }, UI.items(Store.companyLabel(p.company), p.policyNo ? h('span', { class: 'mono' }, p.policyNo) : null))),
+            h('td', null, p.plate ? UI.plate(p.plate) : '—'),
+            h('td', null, h('a', { href: '#ay-' + p.month, onClick: function () { m.close(); } }, F.month(p.month, true))),
+            h('td', { class: 'num' }, F.date(p.endDate)),
+            h('td', null, s ? h('a', { href: '#ay-' + s.month, onClick: function () { m.close(); } }, F.month(s.month, true) + ' · ' + (s.policyType || '')) :
+              info.state === 'renewed' ? t('reports.markedRenewed') : info.state === 'lost' ? UI.pill(t('state.lost'), 'plain') : UI.pill(t('reports.noneFound'), 'warn')));
+        })))),
+        h('p', { class: 'small muted' }, t('reports.retentionHow'))],
+      foot: [h('a', { class: 'btn', href: '#yenilemeler', onClick: function () { m.close(); } }, icon('refresh-cw'), t('nav.renewals')),
+        h('span', { class: 'spacer' }), h('button', { type: 'button', class: 'btn', onClick: function () { m.close(); } }, t('common.close'))]
+    });
+  };
+
   // ------------------------------------------------------------------ tasks
   App.editTask = function (init) {
     init = init || {};

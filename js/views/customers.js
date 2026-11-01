@@ -399,7 +399,8 @@
     var tot = Portfolio.totals(list);
     return h('div', { class: 'print-only' },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '12px' } },
-        h('div', null, h('div', { style: { fontSize: '16pt', fontWeight: 700 } }, Store.settings.agencyName), h('div', null, [Store.settings.agencyPhone, Store.settings.agencyEmail].filter(Boolean).join(' · ')), h('div', null, Store.settings.agencyAddress || '')),
+        Store.settings.logo ? h('img', { src: Store.settings.logo, alt: '', style: { width: '56px', height: '56px', objectFit: 'contain', marginRight: '12px' } }) : null,
+        h('div', { style: { flex: 1 } }, h('div', { style: { fontSize: '16pt', fontWeight: 700 } }, Store.settings.agencyName), h('div', null, [Store.settings.agencyPhone, Store.settings.agencyEmail].filter(Boolean).join(' · ')), h('div', null, Store.settings.agencyAddress || '')),
         h('div', { style: { textAlign: 'right' } }, h('div', { style: { fontWeight: 700 } }, t('customer.statement')), h('div', null, F.date(U.todayISO())))),
       h('div', { style: { marginBottom: '10px' } }, h('div', { style: { fontSize: '14pt', fontWeight: 700 } }, c.name),
         h('div', null, [c.tc ? t('field.tc') + ': ' + (masked() ? U.maskId(c.tc) : c.tc) : '', c.phone ? U.formatPhone(c.phone) : '', c.profession].filter(Boolean).join(' · '))),

@@ -45,6 +45,61 @@
     { id: 'ayarlar', icon: 'settings', label: 'nav.settings' }
   ];
 
+  // ------------------------------------------------------------------ the agency's picture
+  /** Opens the file chooser for the picture in the top-left corner. */
+  App.pickLogo = function () {
+    var input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/bmp', hidden: true });
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      input.remove();
+      if (f) App.setLogoFile(f);
+    });
+    document.body.appendChild(input);
+    input.click();
+  };
+
+  /** Shrinks the picture to at most 192 × 192 (it is shown at 40 px) and keeps it with the settings and backups. */
+  App.setLogoFile = function (file) {
+    if (!file || !/^image\//.test(file.type || '') && !/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(file.name || '')) { UI.toast(t('logo.notImage'), { type: 'bad' }); return Promise.resolve(false); }
+    if (file.size > 20 * 1048576) { UI.toast(t('logo.tooBig'), { type: 'bad' }); return Promise.resolve(false); }
+    var url = URL.createObjectURL(file);
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth || 192, hgt = img.naturalHeight || 192;
+        var k = Math.min(1, 192 / Math.max(w, hgt));
+        var cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(hgt * k));
+        var canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        var ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, cw, ch);
+        var data = canvas.toDataURL('image/png');
+        if (data.length > 200000) {
+          // a photo: JPEG on white is a tenth of the size
+          ctx.globalCompositeOperation = 'destination-over';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, cw, ch);
+          data = canvas.toDataURL('image/jpeg', 0.88);
+        }
+        URL.revokeObjectURL(url);
+        var before = Store.settings.logo || '';
+        Store.updateSettings({ logo: data });
+        UI.toast(t('logo.saved'), { action: { label: t('common.undo'), fn: function () { Store.updateSettings({ logo: before }); } } });
+        resolve(true);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); UI.toast(t('logo.notImage'), { type: 'bad' }); resolve(false); };
+      img.src = url;
+    });
+  };
+
+  App.removeLogo = function () {
+    var before = Store.settings.logo || '';
+    if (!before) return;
+    Store.updateSettings({ logo: '' });
+    UI.toast(t('logo.removed'), { action: { label: t('common.undo'), fn: function () { Store.updateSettings({ logo: before }); } } });
+  };
+
   App.dueCount = function () {
     var n = 0;
     Store.derived().renewal.forEach(function (i) { if (i.state === 'due') n++; });
@@ -84,10 +139,12 @@
     UI.clear(root);
     els.nav = h('nav', { class: 'nav', 'aria-label': t('nav.menu') });
     els.brandName = h('div', { class: 'brand-name' });
-    els.brandMark = h('div', { class: 'brand-mark', 'aria-hidden': 'true' });
+    // the agency's picture (or its initials): a click chooses a picture
+    els.brandMark = h('button', { type: 'button', class: 'brand-mark', id: 'brand-logo', onClick: function () { App.pickLogo(); } });
     els.navFoot = h('div', { class: 'nav-foot' });
     els.sidebar = h('aside', { class: 'sidebar', id: 'sidebar' },
-      h('a', { class: 'brand', href: '#panel', style: { textDecoration: 'none' } }, els.brandMark, h('div', { style: { minWidth: 0 } }, els.brandName, h('div', { class: 'brand-sub', id: 'brand-sub' }))),
+      h('div', { class: 'brand' }, els.brandMark,
+        h('a', { class: 'brand-link', href: '#panel' }, els.brandName, h('div', { class: 'brand-sub', id: 'brand-sub' }))),
       els.nav, els.navFoot);
     els.title = h('h1', { id: 'page-title' });
     els.sub = h('div', { class: 'topbar-sub', id: 'page-sub' });
@@ -115,7 +172,12 @@
   function updateShellTexts() {
     var s = Store.settings;
     els.brandName.textContent = s.agencyName || 'Sigorta Portföy';
-    els.brandMark.textContent = UI.initials(s.agencyName || 'Sigorta Portföy');
+    UI.clear(els.brandMark);
+    els.brandMark.classList.toggle('has-logo', !!s.logo);
+    els.brandMark.appendChild(s.logo ? h('img', { src: s.logo, alt: '' }) : h('span', { class: 'brand-initials' }, UI.initials(s.agencyName || 'Sigorta Portföy')));
+    els.brandMark.appendChild(h('span', { class: 'brand-cam', 'aria-hidden': 'true' }, icon('camera')));
+    els.brandMark.title = s.logo ? t('logo.change') : t('logo.pick');
+    els.brandMark.setAttribute('aria-label', els.brandMark.title);
     document.getElementById('brand-sub').textContent = t('app.tagline');
     els.newBtn.lastChild.textContent = t('nav.newRecord');
     els.newBtn.title = t('nav.newRecord');

@@ -243,24 +243,33 @@
           { label: t('dash.metric.premium'), align: 'r', value: function (r) { return F.money(r.premium); } },
           { label: t('dash.metric.commission'), align: 'r', value: function (r) { return F.money(r.commission); } }
         ], byCust)));
-      // retention by expiry month
+      // renewal rate by the month a policy ENDS in (not the month it was sold in): was a renewal found for it?
       var expRows = [];
-      var byExp = U.groupBy(d.policies.filter(function (p) { var i = d.renewal.get(p.id); return p.endDate && p.endDate < d.today && i && i.state !== 'short' && i.state !== 'none'; }), function (p) { return U.monthKeyOf(p.endDate); });
+      var byExp = U.groupBy(d.policies.filter(function (p) {
+        var i = d.renewal.get(p.id);
+        return p.endDate && p.endDate < d.today && i && i.state !== 'short' && i.state !== 'none' && i.state !== 'cancelled';
+      }), function (p) { return U.monthKeyOf(p.endDate); });
       Array.from(byExp.keys()).sort().slice(-12).forEach(function (k) {
         var ps = byExp.get(k);
-        var ren = ps.filter(function (p) { return d.renewal.get(p.id).state === 'renewed'; }).length;
-        var lost = ps.filter(function (p) { return d.renewal.get(p.id).state === 'lost'; }).length;
-        expRows.push({ key: k, n: ps.length, renewed: ren, lost: lost, open: ps.length - ren - lost });
+        var st = function (s) { return ps.filter(function (p) { return d.renewal.get(p.id).state === s; }); };
+        expRows.push({ key: k, all: ps, renewed: st('renewed'), lost: st('lost'), open: st('expired') });
       });
+      function countBtn(r, which, label) {
+        var list = r[which];
+        if (!list.length) return F.num(0);
+        return h('button', { type: 'button', class: 'link-btn num', id: 'ret-' + r.key + '-' + which, title: t('reports.retShow'),
+          onClick: function () { App.renewalListDialog(label + ' · ' + t('reports.retEnding', { m: F.month(r.key) }), list); } }, F.num(list.length));
+      }
       var retCard = h('section', { class: 'card', id: 'rep-retention' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.retention')), h('span', { class: 'sub' }, t('reports.retentionSub'))),
         h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, expRows.length ? Charts.miniTable([
           { label: t('reports.expiryMonth'), value: function (r) { return F.month(r.key); } },
-          { label: t('reports.expired'), align: 'r', value: function (r) { return F.num(r.n); } },
-          { label: t('state.renewed'), align: 'r', value: function (r) { return F.num(r.renewed); } },
-          { label: t('state.lost'), align: 'r', value: function (r) { return F.num(r.lost); } },
-          { label: t('reports.notRenewed'), align: 'r', value: function (r) { return F.num(r.open); } },
-          { label: t('reports.rate'), align: 'r', value: function (r) { return F.pct(r.n ? r.renewed / r.n : null, 0); } }
-        ], expRows) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('reports.noRetention'))));
+          { label: t('reports.expired'), align: 'r', value: function (r) { return countBtn(r, 'all', t('reports.expired')); } },
+          { label: t('state.renewed'), align: 'r', value: function (r) { return countBtn(r, 'renewed', t('state.renewed')); } },
+          { label: t('state.lost'), align: 'r', value: function (r) { return countBtn(r, 'lost', t('state.lost')); } },
+          { label: t('reports.notRenewed'), align: 'r', value: function (r) { return countBtn(r, 'open', t('reports.notRenewed')); } },
+          { label: t('reports.rate'), align: 'r', value: function (r) { return F.pct(r.all.length ? r.renewed.length / r.all.length : null, 0); } }
+        ], expRows) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('reports.noRetention')),
+          expRows.length ? h('p', { class: 'small muted', id: 'rep-retention-note', style: { padding: '8px 18px 14px' } }, t('reports.retentionNote')) : null));
       // cancellations (İptal blocks of the months)
       var cancelRows = cancelRowsByMonth(filteredCancels(vs), list);
       var cancelCard = h('section', { class: 'card', id: 'rep-cancels' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.cancelTitle')), h('span', { class: 'sub' }, t('reports.cancelSub'))),

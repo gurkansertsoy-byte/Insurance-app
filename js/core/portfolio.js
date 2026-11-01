@@ -382,11 +382,27 @@
     var cancelled = opts.cancelled || null;
     var skip = opts.skip || null; // EK / ZEYİL rows: renewed with the policy they belong to
     var out = new Map();
+    var metaOf = new Map(), byPlate = new Map(), byNo = new Map();
+    policies.forEach(function (p) {
+      var m = { p: p, cat: Schema.categoryOf(p.policyType), plate: p.plate ? U.plateKey(p.plate) : '', type: U.fold(p.policyType), no: p.policyNo ? noKey(p.policyNo) : '' };
+      metaOf.set(p.id, m);
+      if (m.plate) pushTo(byPlate, m.plate, m);
+      if (m.no.length >= 5) pushTo(byNo, m.no, m);
+    });
+    /** b's policy can be the renewal of a's: same line of business (and car), starting about when a ends. */
+    function fits(a, b) {
+      var p = a.p, q = b.p;
+      if (q === p || !q.endDate || b.cat !== a.cat || (skip && skip.has(q.id))) return false;
+      if (cancelled && cancelled.has(q.id)) return false; // a cancelled renewal does not count
+      if (a.cat === 'diger' && b.type !== a.type) return false;
+      if (a.plate && b.plate && a.plate !== b.plate) return false;
+      if (U.diffDays(p.endDate, q.endDate) < 60) return false;
+      var qStart = q.startDate || U.addYears(q.endDate, -1);
+      return Math.abs(U.diffDays(p.endDate, qStart)) <= 100;
+    }
     var byCustomer = U.groupBy(policies, function (p) { return p.customerId; });
     byCustomer.forEach(function (list) {
-      var meta = list.map(function (p) {
-        return { p: p, cat: Schema.categoryOf(p.policyType), plate: p.plate ? U.plateKey(p.plate) : '', type: U.fold(p.policyType) };
-      });
+      var meta = list.map(function (p) { return metaOf.get(p.id); });
       meta.forEach(function (a) {
         var p = a.p;
         var info = { state: 'none', daysLeft: null, successorId: null };
@@ -401,17 +417,11 @@
         info.daysLeft = U.diffDays(today, p.endDate);
         if (NOT_RENEWABLE[a.cat]) { info.state = 'short'; out.set(p.id, info); return; }
         var succ = null;
-        for (var i = 0; i < meta.length && !succ; i++) {
-          var b = meta[i], q = b.p;
-          if (q === p || !q.endDate || b.cat !== a.cat || (skip && skip.has(q.id))) continue;
-          if (cancelled && cancelled.has(q.id)) continue; // a cancelled renewal does not count
-          if (a.cat === 'diger' && b.type !== a.type) continue;
-          if (a.plate && b.plate && a.plate !== b.plate) continue;
-          if (U.diffDays(p.endDate, q.endDate) < 60) continue;
-          var qStart = q.startDate || U.addYears(q.endDate, -1);
-          if (Math.abs(U.diffDays(p.endDate, qStart)) > 100) continue;
-          succ = q;
-        }
+        for (var i = 0; i < meta.length && !succ; i++) if (fits(a, meta[i])) succ = meta[i].p;
+        // the renewal can sit on another customer card (the name written differently): the same car or the same
+        // policy number (some insurers keep it) finds it
+        if (!succ && a.plate) (byPlate.get(a.plate) || []).forEach(function (b) { if (!succ && fits(a, b)) succ = b.p; });
+        if (!succ && a.no.length >= 5) (byNo.get(a.no) || []).forEach(function (b) { if (!succ && fits(a, b)) succ = b.p; });
         var manual = p.renewal && p.renewal.status;
         if (succ) { info.state = 'renewed'; info.successorId = succ.id; }
         else if (manual === 'renewed') info.state = 'renewed';
@@ -542,7 +552,10 @@
         for (var i = bases.length - 1; i >= 0 && !base; i--) {
           var p = bases[i];
           if (p.company && q.company && U.companyKey(p.company) !== U.companyKey(q.company)) continue;
-          if (q.month === p.month || q.month < endMonth(p)) base = p;
+          if (!(q.month === p.month || q.month < endMonth(p))) continue;
+          // YENİLEME with plus amounts in the policy's last two months: renewed early under the same number
+          if (kindOf(q) === 'renewal' && !minusRow(q) && q.month !== p.month && q.month >= U.addMonthsToKey(endMonth(p), -2)) continue;
+          base = p;
         }
         if (!base) { // the first row, or the policy renewed under the same number
           if (!(minusRow(q) || kindOf(q) === 'cancel')) bases.push(q);

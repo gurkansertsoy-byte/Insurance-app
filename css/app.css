@@ -52,6 +52,7 @@
   --info-soft: #e2ecf8;
   --info-ink: #1c5cab;
   --chart-1: #2a78d6;
+  --chart-1-soft: #a9c9ef;
   --chart-2: #eb6834;
   --chart-3: #1baf7a;
   --chart-4: #eda100;
@@ -109,6 +110,7 @@
     --info-soft: #172a42;
     --info-ink: #8ab8f0;
     --chart-1: #3987e5;
+    --chart-1-soft: #2c4f78;
     --chart-2: #d95926;
     --chart-3: #199e70;
     --chart-4: #c98500;
@@ -160,6 +162,7 @@
   --info-soft: #172a42;
   --info-ink: #8ab8f0;
   --chart-1: #3987e5;
+  --chart-1-soft: #2c4f78;
   --chart-2: #d95926;
   --chart-3: #199e70;
   --chart-4: #c98500;
@@ -239,13 +242,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
   z-index: 30;
 }
 .brand { display: flex; align-items: center; gap: 11px; padding: 18px 18px 16px; }
+.brand-link { display: block; min-width: 0; text-decoration: none; }
 .brand-mark {
-  width: 36px; height: 36px; border-radius: 9px; flex: none;
+  position: relative; width: 40px; height: 40px; border-radius: 10px; flex: none; padding: 0; border: 0; cursor: pointer; overflow: hidden;
   display: grid; place-items: center;
   background: linear-gradient(145deg, #1d8a82, #0b5753);
-  color: #ffffff; font-weight: 700; font-size: 14px; letter-spacing: 0.02em;
+  color: #ffffff; font: inherit; font-weight: 700; font-size: 14px; letter-spacing: 0.02em;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
+.brand-mark.has-logo { background: #ffffff; }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* a camera over the picture says it can be changed */
+.brand-mark .brand-cam { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); color: #ffffff;
+  font-size: 17px; opacity: 0; transition: opacity 0.12s; }
+.brand-mark:hover .brand-cam { opacity: 1; }
+.brand-mark:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.logo-preview { width: 56px; height: 56px; border-radius: 12px; border: 1px solid var(--border); background: #ffffff; display: grid; place-items: center; overflow: hidden; flex: none; }
+.logo-preview img { width: 100%; height: 100%; object-fit: contain; }
+.logo-preview .brand-initials { color: var(--text-3); font-weight: 700; }
 .brand-name { font-weight: 600; color: #ffffff; font-size: 14.5px; line-height: 1.2; overflow-wrap: anywhere; }
 .brand-sub { font-size: 11.5px; color: var(--nav-muted); }
 .nav { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; overflow-y: auto; flex: 1; }
@@ -479,6 +493,8 @@ a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .toolbar .search-local { position: relative; flex: 1 1 260px; }
 .toolbar .search-local.grow { flex: 3 1 320px; }
 .chips-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-btn:hover { color: var(--accent); }
 .toolbar .search-local input { width: 100%; padding-left: 34px; }
 .toolbar .search-local .svg-icon { position: absolute; left: 11px; top: 10px; color: var(--text-3); font-size: 16px; }
 .result-count { color: var(--text-3); font-size: 13px; }
@@ -719,6 +735,13 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .legend i.line { height: 2px; width: 14px; border-radius: 1px; }
 .legend i.line.hollow { border: 0; border-top: 2px dashed var(--chart-unknown); height: 0; }
 .chart-note { font-size: 12px; color: var(--text-3); margin-top: 8px; }
+/* the same month in every year: one small chart per measure */
+.same-month { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 22px; }
+.same-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 2px; }
+.same-head strong { font-size: 16px; }
+.same-head .delta-up, .same-head .delta-down { font-size: 12px; }
+@media (max-width: 1100px) { .same-month { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .same-month { grid-template-columns: minmax(0, 1fr); } }
 .kinds-split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 22px; }
 .kinds-panel-head { display: flex; align-items: center; gap: 7px; font-size: 13px; margin-bottom: 2px; }
 .kinds-panel-head .muted { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }

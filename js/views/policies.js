@@ -193,7 +193,9 @@
             h('div', { class: 'src' }, meta && meta.file ? t('months.fromFile', { sheet: meta.sheet, file: meta.file }) : t('months.manual')));
         })));
       });
-      return h('div', { class: 'stack' }, blocks);
+      // one month of the year in every year of the file, side by side
+      var same = App.sameMonthCard({ id: 'same-month', selectable: true, state: App.viewState.sameMonth || (App.viewState.sameMonth = {}) });
+      return h('div', { class: 'stack' }, same, blocks);
     }
   };
 
@@ -321,7 +323,9 @@
               UI.toast(t('months.deleted', { n: res.policies, c: res.customers }));
             });
         } }, icon('trash-2'), t('months.delete')));
-      return h('div', { class: 'stack' }, nav, kpis, actions,
+      // the same month in other years, when the file has them
+      var same = App.sameMonthRows(r.key.slice(5)).length > 1 ? App.sameMonthCard({ id: 'month-same', month: r.key.slice(5), current: r.key }) : null;
+      return h('div', { class: 'stack' }, nav, kpis, same, actions,
         h('section', { class: 'card', style: { overflow: 'hidden' } },
           h('div', { class: 'card-head' }, h('h2', null, t('months.sheetTitle')), h('span', { class: 'sub' }, t('months.sheetSub', { n: cols.length }))),
           h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, table.el)),

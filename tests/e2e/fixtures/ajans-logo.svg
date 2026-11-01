@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="48" fill="#0f3d6e"/>
+  <path d="M128 40 L200 70 V128 C200 172 168 204 128 218 C88 204 56 172 56 128 V70 Z" fill="#f2b632"/>
+  <path d="M128 64 L180 86 V128 C180 160 158 184 128 196 C98 184 76 160 76 128 V86 Z" fill="#0f3d6e"/>
+  <text x="128" y="152" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="700" fill="#ffffff">YS</text>
+</svg>

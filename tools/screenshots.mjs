@@ -463,6 +463,28 @@ async function repeats() {
       if (wrap && th) wrap.scrollLeft = Math.max(0, th.offsetLeft - 700);
     });
     await snap(page, '46-month-minus-row');
+    // the same month in every year, and the policies behind a renewal-rate number
+    await go(page, 'aylar');
+    await waitHash(page, '#aylar');
+    await page.selectOption('#same-month-month', '10');
+    await page.mouse.move(1, 1);
+    await page.waitForTimeout(300);
+    await page.locator('#same-month').screenshot({ path: path.join(DIR, '47-same-month.png') });
+    console.log('  47-same-month.png');
+    await go(page, 'raporlar');
+    await waitHash(page, '#raporlar');
+    await page.click('#ret-2026-10-open');
+    await page.waitForSelector('dialog[open] #renewal-list');
+    await snap(page, '48-renewal-list');
+    await page.keyboard.press('Escape');
+    // the agency's picture in the top-left corner
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('#brand-logo')]);
+    await chooser.setFiles(path.join(ROOT, 'tests', 'e2e', 'fixtures', 'ajans-logo.svg'));
+    await page.waitForSelector('#brand-logo img');
+    await go(page, 'ayarlar');
+    await waitHash(page, '#ayarlar');
+    await page.waitForSelector('#settings-logo img');
+    await snap(page, '49-logo');
     if (env.errors.length) throw new Error(env.errors.join('\n'));
   } finally { await env.close(); }
 }

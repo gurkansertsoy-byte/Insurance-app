@@ -63,6 +63,7 @@
   --info-soft: #e2ecf8;
   --info-ink: #1c5cab;
   --chart-1: #2a78d6;
+  --chart-1-soft: #a9c9ef;
   --chart-2: #eb6834;
   --chart-3: #1baf7a;
   --chart-4: #eda100;
@@ -120,6 +121,7 @@
     --info-soft: #172a42;
     --info-ink: #8ab8f0;
     --chart-1: #3987e5;
+    --chart-1-soft: #2c4f78;
     --chart-2: #d95926;
     --chart-3: #199e70;
     --chart-4: #c98500;
@@ -171,6 +173,7 @@
   --info-soft: #172a42;
   --info-ink: #8ab8f0;
   --chart-1: #3987e5;
+  --chart-1-soft: #2c4f78;
   --chart-2: #d95926;
   --chart-3: #199e70;
   --chart-4: #c98500;
@@ -250,13 +253,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
   z-index: 30;
 }
 .brand { display: flex; align-items: center; gap: 11px; padding: 18px 18px 16px; }
+.brand-link { display: block; min-width: 0; text-decoration: none; }
 .brand-mark {
-  width: 36px; height: 36px; border-radius: 9px; flex: none;
+  position: relative; width: 40px; height: 40px; border-radius: 10px; flex: none; padding: 0; border: 0; cursor: pointer; overflow: hidden;
   display: grid; place-items: center;
   background: linear-gradient(145deg, #1d8a82, #0b5753);
-  color: #ffffff; font-weight: 700; font-size: 14px; letter-spacing: 0.02em;
+  color: #ffffff; font: inherit; font-weight: 700; font-size: 14px; letter-spacing: 0.02em;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
+.brand-mark.has-logo { background: #ffffff; }
+.brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+/* a camera over the picture says it can be changed */
+.brand-mark .brand-cam { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); color: #ffffff;
+  font-size: 17px; opacity: 0; transition: opacity 0.12s; }
+.brand-mark:hover .brand-cam { opacity: 1; }
+.brand-mark:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.logo-preview { width: 56px; height: 56px; border-radius: 12px; border: 1px solid var(--border); background: #ffffff; display: grid; place-items: center; overflow: hidden; flex: none; }
+.logo-preview img { width: 100%; height: 100%; object-fit: contain; }
+.logo-preview .brand-initials { color: var(--text-3); font-weight: 700; }
 .brand-name { font-weight: 600; color: #ffffff; font-size: 14.5px; line-height: 1.2; overflow-wrap: anywhere; }
 .brand-sub { font-size: 11.5px; color: var(--nav-muted); }
 .nav { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; overflow-y: auto; flex: 1; }
@@ -490,6 +504,8 @@ a.kpi:hover { background: var(--surface-2); text-decoration: none; }
 .toolbar .search-local { position: relative; flex: 1 1 260px; }
 .toolbar .search-local.grow { flex: 3 1 320px; }
 .chips-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.link-btn { border: 0; background: none; padding: 0; font: inherit; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link-btn:hover { color: var(--accent); }
 .toolbar .search-local input { width: 100%; padding-left: 34px; }
 .toolbar .search-local .svg-icon { position: absolute; left: 11px; top: 10px; color: var(--text-3); font-size: 16px; }
 .result-count { color: var(--text-3); font-size: 13px; }
@@ -730,6 +746,13 @@ a.list-item:hover { background: var(--surface-2); text-decoration: none; }
 .legend i.line { height: 2px; width: 14px; border-radius: 1px; }
 .legend i.line.hollow { border: 0; border-top: 2px dashed var(--chart-unknown); height: 0; }
 .chart-note { font-size: 12px; color: var(--text-3); margin-top: 8px; }
+/* the same month in every year: one small chart per measure */
+.same-month { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 22px; }
+.same-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 2px; }
+.same-head strong { font-size: 16px; }
+.same-head .delta-up, .same-head .delta-down { font-size: 12px; }
+@media (max-width: 1100px) { .same-month { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .same-month { grid-template-columns: minmax(0, 1fr); } }
 .kinds-split { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 22px; }
 .kinds-panel-head { display: flex; align-items: center; gap: 7px; font-size: 13px; margin-bottom: 2px; }
 .kinds-panel-head .muted { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -2756,11 +2779,27 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var cancelled = opts.cancelled || null;
     var skip = opts.skip || null; // EK / ZEYİL rows: renewed with the policy they belong to
     var out = new Map();
+    var metaOf = new Map(), byPlate = new Map(), byNo = new Map();
+    policies.forEach(function (p) {
+      var m = { p: p, cat: Schema.categoryOf(p.policyType), plate: p.plate ? U.plateKey(p.plate) : '', type: U.fold(p.policyType), no: p.policyNo ? noKey(p.policyNo) : '' };
+      metaOf.set(p.id, m);
+      if (m.plate) pushTo(byPlate, m.plate, m);
+      if (m.no.length >= 5) pushTo(byNo, m.no, m);
+    });
+    /** b's policy can be the renewal of a's: same line of business (and car), starting about when a ends. */
+    function fits(a, b) {
+      var p = a.p, q = b.p;
+      if (q === p || !q.endDate || b.cat !== a.cat || (skip && skip.has(q.id))) return false;
+      if (cancelled && cancelled.has(q.id)) return false; // a cancelled renewal does not count
+      if (a.cat === 'diger' && b.type !== a.type) return false;
+      if (a.plate && b.plate && a.plate !== b.plate) return false;
+      if (U.diffDays(p.endDate, q.endDate) < 60) return false;
+      var qStart = q.startDate || U.addYears(q.endDate, -1);
+      return Math.abs(U.diffDays(p.endDate, qStart)) <= 100;
+    }
     var byCustomer = U.groupBy(policies, function (p) { return p.customerId; });
     byCustomer.forEach(function (list) {
-      var meta = list.map(function (p) {
-        return { p: p, cat: Schema.categoryOf(p.policyType), plate: p.plate ? U.plateKey(p.plate) : '', type: U.fold(p.policyType) };
-      });
+      var meta = list.map(function (p) { return metaOf.get(p.id); });
       meta.forEach(function (a) {
         var p = a.p;
         var info = { state: 'none', daysLeft: null, successorId: null };
@@ -2775,17 +2814,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         info.daysLeft = U.diffDays(today, p.endDate);
         if (NOT_RENEWABLE[a.cat]) { info.state = 'short'; out.set(p.id, info); return; }
         var succ = null;
-        for (var i = 0; i < meta.length && !succ; i++) {
-          var b = meta[i], q = b.p;
-          if (q === p || !q.endDate || b.cat !== a.cat || (skip && skip.has(q.id))) continue;
-          if (cancelled && cancelled.has(q.id)) continue; // a cancelled renewal does not count
-          if (a.cat === 'diger' && b.type !== a.type) continue;
-          if (a.plate && b.plate && a.plate !== b.plate) continue;
-          if (U.diffDays(p.endDate, q.endDate) < 60) continue;
-          var qStart = q.startDate || U.addYears(q.endDate, -1);
-          if (Math.abs(U.diffDays(p.endDate, qStart)) > 100) continue;
-          succ = q;
-        }
+        for (var i = 0; i < meta.length && !succ; i++) if (fits(a, meta[i])) succ = meta[i].p;
+        // the renewal can sit on another customer card (the name written differently): the same car or the same
+        // policy number (some insurers keep it) finds it
+        if (!succ && a.plate) (byPlate.get(a.plate) || []).forEach(function (b) { if (!succ && fits(a, b)) succ = b.p; });
+        if (!succ && a.no.length >= 5) (byNo.get(a.no) || []).forEach(function (b) { if (!succ && fits(a, b)) succ = b.p; });
         var manual = p.renewal && p.renewal.status;
         if (succ) { info.state = 'renewed'; info.successorId = succ.id; }
         else if (manual === 'renewed') info.state = 'renewed';
@@ -2916,7 +2949,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         for (var i = bases.length - 1; i >= 0 && !base; i--) {
           var p = bases[i];
           if (p.company && q.company && U.companyKey(p.company) !== U.companyKey(q.company)) continue;
-          if (q.month === p.month || q.month < endMonth(p)) base = p;
+          if (!(q.month === p.month || q.month < endMonth(p))) continue;
+          // YENİLEME with plus amounts in the policy's last two months: renewed early under the same number
+          if (kindOf(q) === 'renewal' && !minusRow(q) && q.month !== p.month && q.month >= U.addMonthsToKey(endMonth(p), -2)) continue;
+          base = p;
         }
         if (!base) { // the first row, or the policy renewed under the same number
           if (!(minusRow(q) || kindOf(q) === 'cancel')) bases.push(q);
@@ -6444,8 +6480,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'reports.sub': 'Dönem, şirket ve branş bazında üretim', 'reports.export': "Raporu Excel'e aktar",
     'reports.monthly': 'Aylık üretim', 'reports.monthlySub': '{n} ay', 'reports.newRen': 'Yeni iş ve yenileme', 'reports.newRenSub': 'Aylara göre poliçe adedi',
     'reports.byProfession': 'Mesleklere göre prim', 'reports.top': 'İlk {n}', 'reports.topCustomers': 'En yüksek primli müşteriler',
-    'reports.retention': 'Yenileme oranı', 'reports.retentionSub': 'Bitiş ayına göre, son 12 ay', 'reports.expiryMonth': 'Bitiş ayı',
-    'reports.expired': 'Biten', 'reports.notRenewed': 'Yenilenmedi', 'reports.rate': 'Oran', 'reports.noRetention': 'Henüz süresi dolan poliçe yok.',
+    'reports.retention': 'Yenileme oranı', 'reports.retentionSub': 'Bitiş tarihi o ayda olan poliçeler yenilendi mi? Son 12 ay', 'reports.expiryMonth': 'Bitiş ayı',
+    'reports.expired': 'Süresi biten', 'reports.notRenewed': 'Yenilemesi bulunamadı',
+    'reports.retentionNote': 'Bu tablo poliçeleri bittikleri aya göre sayar; Aylık üretim ise o ayın sayfasına yazılan (satılan) poliçeleri. Örneğin Ekim 2026 satırı, bitiş tarihi Ekim 2026 olan (çoğu Ekim 2025’te satılmış) poliçelerdir. Yenilendi: dosyanın sonraki satırlarında aynı müşteri, plaka veya poliçe numarasıyla, eskisi biterken başlayan aynı branştan bir poliçe var. Yenilemesi henüz dosyaya yazılmamışsa (örneğin Kasım sayfasına) “bulunamadı” görünür. İptal edilen poliçeler sayılmaz. Sayılara tıklayınca poliçeler listelenir.',
+    'reports.retShow': 'Poliçeleri göster', 'reports.retEnding': 'bitişi {m}', 'reports.soldIn': 'Satış ayı', 'reports.renewalFound': 'Yenilemesi',
+    'reports.markedRenewed': 'Yenilendi (elle işaretlendi)', 'reports.noneFound': 'Bulunamadı',
+    'reports.retentionHow': 'Yenilemesi bulunamayan bir poliçeyi Yenilemeler sayfasında “Yenilendi” veya “Kaybedildi” olarak işaretleyebilirsiniz.', 'reports.rate': 'Oran', 'reports.noRetention': 'Henüz süresi dolan poliçe yok.',
     'reports.policiesUsing': 'Poliçe', 'reports.accountLine': 'Cari: tahsil edilen {paid}, kalan {open}.', 'reports.oppType': 'Fırsat', 'reports.oppSub': '{n} fırsat', 'reports.unassigned': 'Ödeme şekli girilmemiş tutar: {v}',
     'reports.emptyTitle': 'Rapor için veri yok', 'reports.emptyText': 'Önce Excel dosyanızı aktarın.',
     'report.category': 'Branş', 'report.share': 'Pay', 'report.commRate': 'Komisyon oranı', 'report.newShare': 'Yeni iş payı', 'report.pcs': 'adet', 'report.people': 'kişi',
@@ -6602,6 +6642,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'cancel.undoDecision': 'Kararı geri al', 'cancel.decisionUndone': 'Karar geri alındı; satır yeniden değerlendirildi',
     // the İptaller page
     'nav.cancels': 'İptaller',
+    'compare.title': '{m} ayı, yıllara göre', 'compare.sub': '{years} · prim, komisyon, müşteri ve poliçe sayısı', 'compare.oneYear': 'Dosyada bu ayın tek yılı var',
+    'compare.oneYearNote': 'Önceki yılların {m} sayfaları dosyaya eklendikçe yıllar yan yana görünür.', 'compare.years': '{n} yıl',
+    'compare.pickMonth': 'Karşılaştırılacak ay', 'compare.customers': 'Müşteri sayısı', 'compare.policies': 'Poliçe sayısı', 'compare.change': 'Prim değişimi',
+    'logo.title': 'Logo / resim', 'logo.sub': 'Sol üst köşede ve yazdırılan müşteri dökümünde görünür. Sol üstteki kareye tıklayarak da seçebilirsiniz.',
+    'logo.pick': 'Resim seç', 'logo.change': 'Resmi değiştir', 'logo.remove': 'Resmi kaldır', 'logo.saved': 'Resim kaydedildi', 'logo.removed': 'Resim kaldırıldı',
+    'logo.notImage': 'Bu dosya bir resim değil (PNG, JPG, GIF, WEBP veya SVG seçin)', 'logo.tooBig': 'Resim çok büyük (en fazla 20 MB)',
     'policies.show': 'Göster', 'policies.show.all': 'Tümü', 'policies.show.ek': 'Ek / zeyil', 'policies.show.due': 'Yenilemesi yaklaşan',
     'policies.show.expired': 'Süresi geçmiş', 'policies.show.cancelled': 'İptal edilen',
     'nav.opps': 'Çapraz satış', 'opps.sub': 'Bir poliçe daha alabilecek müşteriler', 'opps.all': 'Tüm fırsatlar', 'opps.allWhy': 'Hepsi bir arada',
@@ -6911,8 +6957,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'reports.sub': 'Production by period, insurer and line', 'reports.export': 'Export report to Excel',
     'reports.monthly': 'Monthly production', 'reports.monthlySub': '{n} months', 'reports.newRen': 'New business and renewals', 'reports.newRenSub': 'Policies per month',
     'reports.byProfession': 'Premium by occupation', 'reports.top': 'Top {n}', 'reports.topCustomers': 'Top customers by premium',
-    'reports.retention': 'Retention rate', 'reports.retentionSub': 'By expiry month, last 12 months', 'reports.expiryMonth': 'Expiry month',
-    'reports.expired': 'Expired', 'reports.notRenewed': 'Not renewed', 'reports.rate': 'Rate', 'reports.noRetention': 'No expired policies yet.',
+    'reports.retention': 'Retention rate', 'reports.retentionSub': 'Were the policies ending in each month renewed? Last 12 months', 'reports.expiryMonth': 'Expiry month',
+    'reports.expired': 'Ended', 'reports.notRenewed': 'No renewal found',
+    'reports.retentionNote': 'This table counts policies by the month they end in; Monthly production counts the policies written on that month’s page (sold then). The October 2026 row, for example, holds the policies ending in October 2026 (mostly sold in October 2025). Renewed: a later row has the same customer, plate or policy number, the same line of business, and starts as the old one ends. A renewal not yet written into the file (on the November page, say) shows as “not found”. Cancelled policies are left out. Click a number to list its policies.',
+    'reports.retShow': 'Show the policies', 'reports.retEnding': 'ending {m}', 'reports.soldIn': 'Sold in', 'reports.renewalFound': 'Renewal',
+    'reports.markedRenewed': 'Renewed (marked by hand)', 'reports.noneFound': 'Not found',
+    'reports.retentionHow': 'A policy whose renewal was not found can be marked “Renewed” or “Lost” on the Renewals page.', 'reports.rate': 'Rate', 'reports.noRetention': 'No expired policies yet.',
     'reports.policiesUsing': 'Policies', 'reports.accountLine': 'On account: {paid} collected, {open} open.', 'reports.oppType': 'Opportunity', 'reports.oppSub': '{n} opportunities', 'reports.unassigned': 'Amount without a payment method: {v}',
     'reports.emptyTitle': 'No data to report', 'reports.emptyText': 'Import your Excel file first.',
     'report.category': 'Line', 'report.share': 'Share', 'report.commRate': 'Commission rate', 'report.newShare': 'New business share', 'report.pcs': 'pcs', 'report.people': 'people',
@@ -7069,6 +7119,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     'cancel.undoDecision': 'Undo my answer', 'cancel.decisionUndone': 'Answer undone; the row was read again',
     // the cancellations page
     'nav.cancels': 'Cancellations',
+    'compare.title': '{m}, year by year', 'compare.sub': '{years} · premium, commission, customers and policies', 'compare.oneYear': 'The file has only one year of this month',
+    'compare.oneYearNote': 'As earlier years’ {m} pages are added to the file, the years appear side by side.', 'compare.years': '{n} {n|year|years}',
+    'compare.pickMonth': 'Month to compare', 'compare.customers': 'Customers', 'compare.policies': 'Policies', 'compare.change': 'Premium change',
+    'logo.title': 'Logo / picture', 'logo.sub': 'Shown in the top-left corner and on printed customer statements. You can also click the square in the top-left corner.',
+    'logo.pick': 'Choose a picture', 'logo.change': 'Change the picture', 'logo.remove': 'Remove the picture', 'logo.saved': 'Picture saved', 'logo.removed': 'Picture removed',
+    'logo.notImage': 'This file is not a picture (choose PNG, JPG, GIF, WEBP or SVG)', 'logo.tooBig': 'The picture is too large (20 MB at most)',
     'policies.show': 'Show', 'policies.show.all': 'All', 'policies.show.ek': 'Ek / zeyil', 'policies.show.due': 'Renewal coming up',
     'policies.show.expired': 'Expired', 'policies.show.cancelled': 'Cancelled',
     'nav.opps': 'Cross-sell', 'opps.sub': 'Customers who could buy one more policy', 'opps.all': 'All opportunities', 'opps.allWhy': 'Everything together',
@@ -7309,7 +7365,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   "file-lock":"<path d=\"M4 9.8V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"M9 17v-2a2 2 0 0 0-4 0v2\"/><rect width=\"8\" height=\"5\" x=\"3\" y=\"17\" rx=\"1\"/>",
   "file-question":"<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"/><path d=\"M12 17h.01\"/><path d=\"M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3\"/>",
   "file-plus":"<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"M9 15h6\"/><path d=\"M12 18v-6\"/>",
-  "circle-help":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"/><path d=\"M12 17h.01\"/>"};
+  "circle-help":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"/><path d=\"M12 17h.01\"/>",
+  "image-plus":"<path d=\"M16 5h6\"/><path d=\"M19 2v6\"/><path d=\"M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5\"/><path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\"/><circle cx=\"9\" cy=\"9\" r=\"2\"/>",
+  "camera":"<path d=\"M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z\"/><circle cx=\"12\" cy=\"13\" r=\"3\"/>"};
 })(typeof self !== 'undefined' ? self : this);
 
 </script>
@@ -7887,7 +7945,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           fill: 'none', stroke: color, 'stroke-width': 1.5, 'stroke-dasharray': '3 2' }) : h('path', { class: 'mark', d: roundTop(cx - bw / 2, yy, bw, y(0) - yy, 4), fill: color });
         svg.appendChild(bar);
         if ((lastIdx - i) % every === 0) svg.appendChild(h('text', { x: cx, y: H - 9, 'text-anchor': 'middle', class: 'lbl' }, d.short || d.label));
-        if (v > 0 && (i === lastIdx || (i === maxIdx && labelMax))) {
+        if (v > 0 && (o.labelAll || i === lastIdx || (i === maxIdx && labelMax))) {
           svg.appendChild(h('text', { x: cx, y: yy - 7, 'text-anchor': 'middle', class: 'val' }, (o.labelFormat || o.format)(v)));
         }
         var hit = h('rect', { class: 'hit', x: padL + band * i, y: padT - 8, width: band, height: plotH + padB, tabindex: 0, role: 'img', 'aria-label': d.label + ': ' + o.format(v) });
@@ -8166,6 +8224,61 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     { id: 'ayarlar', icon: 'settings', label: 'nav.settings' }
   ];
 
+  // ------------------------------------------------------------------ the agency's picture
+  /** Opens the file chooser for the picture in the top-left corner. */
+  App.pickLogo = function () {
+    var input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/bmp', hidden: true });
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      input.remove();
+      if (f) App.setLogoFile(f);
+    });
+    document.body.appendChild(input);
+    input.click();
+  };
+
+  /** Shrinks the picture to at most 192 × 192 (it is shown at 40 px) and keeps it with the settings and backups. */
+  App.setLogoFile = function (file) {
+    if (!file || !/^image\//.test(file.type || '') && !/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(file.name || '')) { UI.toast(t('logo.notImage'), { type: 'bad' }); return Promise.resolve(false); }
+    if (file.size > 20 * 1048576) { UI.toast(t('logo.tooBig'), { type: 'bad' }); return Promise.resolve(false); }
+    var url = URL.createObjectURL(file);
+    return new Promise(function (resolve) {
+      var img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth || 192, hgt = img.naturalHeight || 192;
+        var k = Math.min(1, 192 / Math.max(w, hgt));
+        var cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(hgt * k));
+        var canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        var ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, cw, ch);
+        var data = canvas.toDataURL('image/png');
+        if (data.length > 200000) {
+          // a photo: JPEG on white is a tenth of the size
+          ctx.globalCompositeOperation = 'destination-over';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, cw, ch);
+          data = canvas.toDataURL('image/jpeg', 0.88);
+        }
+        URL.revokeObjectURL(url);
+        var before = Store.settings.logo || '';
+        Store.updateSettings({ logo: data });
+        UI.toast(t('logo.saved'), { action: { label: t('common.undo'), fn: function () { Store.updateSettings({ logo: before }); } } });
+        resolve(true);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); UI.toast(t('logo.notImage'), { type: 'bad' }); resolve(false); };
+      img.src = url;
+    });
+  };
+
+  App.removeLogo = function () {
+    var before = Store.settings.logo || '';
+    if (!before) return;
+    Store.updateSettings({ logo: '' });
+    UI.toast(t('logo.removed'), { action: { label: t('common.undo'), fn: function () { Store.updateSettings({ logo: before }); } } });
+  };
+
   App.dueCount = function () {
     var n = 0;
     Store.derived().renewal.forEach(function (i) { if (i.state === 'due') n++; });
@@ -8205,10 +8318,12 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     UI.clear(root);
     els.nav = h('nav', { class: 'nav', 'aria-label': t('nav.menu') });
     els.brandName = h('div', { class: 'brand-name' });
-    els.brandMark = h('div', { class: 'brand-mark', 'aria-hidden': 'true' });
+    // the agency's picture (or its initials): a click chooses a picture
+    els.brandMark = h('button', { type: 'button', class: 'brand-mark', id: 'brand-logo', onClick: function () { App.pickLogo(); } });
     els.navFoot = h('div', { class: 'nav-foot' });
     els.sidebar = h('aside', { class: 'sidebar', id: 'sidebar' },
-      h('a', { class: 'brand', href: '#panel', style: { textDecoration: 'none' } }, els.brandMark, h('div', { style: { minWidth: 0 } }, els.brandName, h('div', { class: 'brand-sub', id: 'brand-sub' }))),
+      h('div', { class: 'brand' }, els.brandMark,
+        h('a', { class: 'brand-link', href: '#panel' }, els.brandName, h('div', { class: 'brand-sub', id: 'brand-sub' }))),
       els.nav, els.navFoot);
     els.title = h('h1', { id: 'page-title' });
     els.sub = h('div', { class: 'topbar-sub', id: 'page-sub' });
@@ -8236,7 +8351,12 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
   function updateShellTexts() {
     var s = Store.settings;
     els.brandName.textContent = s.agencyName || 'Sigorta Portföy';
-    els.brandMark.textContent = UI.initials(s.agencyName || 'Sigorta Portföy');
+    UI.clear(els.brandMark);
+    els.brandMark.classList.toggle('has-logo', !!s.logo);
+    els.brandMark.appendChild(s.logo ? h('img', { src: s.logo, alt: '' }) : h('span', { class: 'brand-initials' }, UI.initials(s.agencyName || 'Sigorta Portföy')));
+    els.brandMark.appendChild(h('span', { class: 'brand-cam', 'aria-hidden': 'true' }, icon('camera')));
+    els.brandMark.title = s.logo ? t('logo.change') : t('logo.pick');
+    els.brandMark.setAttribute('aria-label', els.brandMark.title);
     document.getElementById('brand-sub').textContent = t('app.tagline');
     els.newBtn.lastChild.textContent = t('nav.newRecord');
     els.newBtn.title = t('nav.newRecord');
@@ -9204,7 +9324,8 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
     var tot = Portfolio.totals(list);
     return h('div', { class: 'print-only' },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '12px' } },
-        h('div', null, h('div', { style: { fontSize: '16pt', fontWeight: 700 } }, Store.settings.agencyName), h('div', null, [Store.settings.agencyPhone, Store.settings.agencyEmail].filter(Boolean).join(' · ')), h('div', null, Store.settings.agencyAddress || '')),
+        Store.settings.logo ? h('img', { src: Store.settings.logo, alt: '', style: { width: '56px', height: '56px', objectFit: 'contain', marginRight: '12px' } }) : null,
+        h('div', { style: { flex: 1 } }, h('div', { style: { fontSize: '16pt', fontWeight: 700 } }, Store.settings.agencyName), h('div', null, [Store.settings.agencyPhone, Store.settings.agencyEmail].filter(Boolean).join(' · ')), h('div', null, Store.settings.agencyAddress || '')),
         h('div', { style: { textAlign: 'right' } }, h('div', { style: { fontWeight: 700 } }, t('customer.statement')), h('div', null, F.date(U.todayISO())))),
       h('div', { style: { marginBottom: '10px' } }, h('div', { style: { fontSize: '14pt', fontWeight: 700 } }, c.name),
         h('div', null, [c.tc ? t('field.tc') + ': ' + (masked() ? U.maskId(c.tc) : c.tc) : '', c.phone ? U.formatPhone(c.phone) : '', c.profession].filter(Boolean).join(' · '))),
@@ -10162,7 +10283,9 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
             h('div', { class: 'src' }, meta && meta.file ? t('months.fromFile', { sheet: meta.sheet, file: meta.file }) : t('months.manual')));
         })));
       });
-      return h('div', { class: 'stack' }, blocks);
+      // one month of the year in every year of the file, side by side
+      var same = App.sameMonthCard({ id: 'same-month', selectable: true, state: App.viewState.sameMonth || (App.viewState.sameMonth = {}) });
+      return h('div', { class: 'stack' }, same, blocks);
     }
   };
 
@@ -10290,7 +10413,9 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
               UI.toast(t('months.deleted', { n: res.policies, c: res.customers }));
             });
         } }, icon('trash-2'), t('months.delete')));
-      return h('div', { class: 'stack' }, nav, kpis, actions,
+      // the same month in other years, when the file has them
+      var same = App.sameMonthRows(r.key.slice(5)).length > 1 ? App.sameMonthCard({ id: 'month-same', month: r.key.slice(5), current: r.key }) : null;
+      return h('div', { class: 'stack' }, nav, kpis, same, actions,
         h('section', { class: 'card', style: { overflow: 'hidden' } },
           h('div', { class: 'card-head' }, h('h2', null, t('months.sheetTitle')), h('span', { class: 'sub' }, t('months.sheetSub', { n: cols.length }))),
           h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, table.el)),
@@ -10733,6 +10858,99 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
 })();
 
 </script>
+<script>/* js/views/compare.js */
+/* The same month in every year of the file: Ekim 2024, Ekim 2025, Ekim 2026 side by side (premium, commission,
+   customers, policies), one small chart per measure since they have different scales. */
+(function () {
+  'use strict';
+  var U = window.U, UI = window.UI, Store = window.Store, Portfolio = window.Portfolio, Charts = window.Charts, App = window.App;
+  var h = UI.h, t = UI.t, icon = UI.icon, F = UI.F;
+
+  var MEASURES = [
+    { key: 'premium', label: 'dash.metric.premium', money: true },
+    { key: 'commission', label: 'dash.metric.commission', money: true },
+    { key: 'customers', label: 'compare.customers' },
+    { key: 'count', label: 'compare.policies' }
+  ];
+
+  /** Every year's figures for month number mm ('01'…'12'), oldest first. */
+  App.sameMonthRows = function (mm) {
+    var d = Store.derived();
+    return d.months.filter(function (k) { return k.slice(5) === mm; }).map(function (k) {
+      var list = d.policies.filter(function (p) { return p.month === k; });
+      var tot = Portfolio.totals(list);
+      return { key: k, year: k.slice(0, 4), premium: tot.premium, commission: tot.commission, customers: tot.customerCount, count: tot.count, newCount: tot.newCount };
+    });
+  };
+
+  function change(rows, key) {
+    if (rows.length < 2) return null;
+    var a = rows[rows.length - 2][key], b = rows[rows.length - 1][key];
+    return a ? (b - a) / a : null;
+  }
+  function deltaTag(x) {
+    if (x == null) return null;
+    return h('span', { class: x >= 0 ? 'delta-up' : 'delta-down' }, (x >= 0 ? '▲ ' : '▼ ') + F.pct(Math.abs(x), 0));
+  }
+
+  /**
+   * Card: o = { id, month ('01'…'12'), selectable (a month list in the card), current ('YYYY-MM', drawn darker), state }
+   */
+  App.sameMonthCard = function (o) {
+    var d = Store.derived();
+    var vs = o.state || {};
+    var have = Array.from(new Set(d.months.map(function (k) { return k.slice(5); }))).sort();
+    var mm = (o.selectable && vs.month) || o.month || (d.months.length ? d.months[d.months.length - 1].slice(5) : U.currentMonthKey().slice(5));
+    if (have.indexOf(mm) < 0 && have.length) mm = have[have.length - 1];
+    var rows = App.sameMonthRows(mm);
+    var monthName = F.month('2000-' + mm).replace(/\s*2000$/, '');
+    var sel = o.selectable ? UI.select((o.id || 'same') + '-month', have.map(function (m) {
+      var n = d.months.filter(function (k) { return k.slice(5) === m; }).length;
+      return { value: m, label: F.month('2000-' + m).replace(/\s*2000$/, '') + ' (' + t('compare.years', { n: n }) + ')' };
+    }), mm, { onChange: function (e) { vs.month = e.target.value; App.refresh(); }, 'aria-label': t('compare.pickMonth') }) : null;
+    return Charts.card({
+      id: o.id, title: t('compare.title', { m: monthName }), sub: rows.length > 1 ? t('compare.sub', { years: rows.map(function (r) { return r.year; }).join(', ') }) : t('compare.oneYear'),
+      actions: sel,
+      chart: function () {
+        var panels = h('div', { class: 'same-month', id: (o.id || 'same') + '-panels' }, MEASURES.map(function (m) {
+          var last = rows[rows.length - 1];
+          var fmt = m.money ? function (v) { return F.moneyC(v); } : function (v) { return F.num(v); };
+          return h('div', { class: 'same-panel', 'data-measure': m.key },
+            h('div', { class: 'same-head' }, h('span', { class: 'muted' }, t(m.label)),
+              h('strong', { class: 'num' }, last ? fmt(last[m.key]) : '—'), deltaTag(change(rows, m.key))),
+            Charts.columns({
+              ariaLabel: t(m.label) + ' · ' + monthName, height: 170, padL: m.money ? 52 : 34, tickCount: 3, integer: !m.money, labelAll: true,
+              data: rows.map(function (r) {
+                return { key: r.key, label: F.month(r.key), short: r.year, value: r[m.key],
+                  // this page's year darker, the other years lighter
+                  color: o.current && r.key !== o.current ? 'var(--chart-1-soft)' : 'var(--chart-1)',
+                  tip: [{ series: t(m.label), value: m.money ? F.money(r[m.key]) : F.num(r[m.key]), color: 'var(--chart-1)' }] };
+              }),
+              format: fmt, tickFormat: m.money ? function (v) { return U.fmtCompact(v, window.I18N.lang); } : function (v) { return F.num(v); },
+              onClick: function (x) { App.go('ay-' + x.key); }
+            }));
+        }));
+        return h('div', null, panels, rows.length < 2 ? h('p', { class: 'chart-note' }, t('compare.oneYearNote', { m: monthName })) : null);
+      },
+      table: function () {
+        return Charts.miniTable([
+          { label: t('common.month'), value: function (r) { return h('a', { href: '#ay-' + r.key }, F.month(r.key)); } },
+          { label: t('dash.metric.premium'), align: 'r', value: function (r) { return F.money(r.premium); } },
+          { label: t('dash.metric.commission'), align: 'r', value: function (r) { return F.money(r.commission); } },
+          { label: t('compare.customers'), align: 'r', value: function (r) { return F.num(r.customers); } },
+          { label: t('compare.policies'), align: 'r', value: function (r) { return F.num(r.count); } },
+          { label: t('field.newBusiness'), align: 'r', value: function (r) { return F.num(r.newCount); } },
+          { label: t('compare.change'), align: 'r', value: function (r) {
+            var i = rows.indexOf(r);
+            return i > 0 && rows[i - 1].premium ? deltaTag((r.premium - rows[i - 1].premium) / rows[i - 1].premium) : '—';
+          } }
+        ], rows);
+      }
+    });
+  };
+})();
+
+</script>
 <script>/* js/views/renewals.js */
 /* Renewals, collections (cari) and tasks */
 (function () {
@@ -10914,6 +11132,33 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
         m.close();
         UI.toast(t('collections.saved', { v: F.money(v) }));
       }
+    });
+  };
+
+  // ------------------------------------------------------------------ the policies behind a renewal-rate number
+  App.renewalListDialog = function (title, list) {
+    var d = Store.derived();
+    var rows = list.slice().sort(function (a, b) { return U.cmp(a.endDate, b.endDate); });
+    var m = UI.modal({
+      title: title, icon: 'refresh-cw', size: 'wide',
+      body: [h('div', { class: 'table-wrap', id: 'renewal-list' }, h('table', { class: 'data' },
+        h('thead', null, h('tr', null, [t('common.customer'), t('field.policyType'), t('field.plate'), t('reports.soldIn'), t('field.endDate'), t('reports.renewalFound')].map(function (x) { return h('th', null, x); }))),
+        h('tbody', null, rows.map(function (p) {
+          var c = Store.customers.get(p.customerId);
+          var info = d.renewal.get(p.id) || {};
+          var s = info.successorId && Store.policies.get(info.successorId);
+          return h('tr', null,
+            h('td', null, h('a', { href: '#musteri-' + p.customerId, onClick: function () { m.close(); } }, c ? c.name : '—')),
+            h('td', null, p.policyType || '—', h('div', { class: 'row tight small muted', style: { columnGap: '8px' } }, UI.items(Store.companyLabel(p.company), p.policyNo ? h('span', { class: 'mono' }, p.policyNo) : null))),
+            h('td', null, p.plate ? UI.plate(p.plate) : '—'),
+            h('td', null, h('a', { href: '#ay-' + p.month, onClick: function () { m.close(); } }, F.month(p.month, true))),
+            h('td', { class: 'num' }, F.date(p.endDate)),
+            h('td', null, s ? h('a', { href: '#ay-' + s.month, onClick: function () { m.close(); } }, F.month(s.month, true) + ' · ' + (s.policyType || '')) :
+              info.state === 'renewed' ? t('reports.markedRenewed') : info.state === 'lost' ? UI.pill(t('state.lost'), 'plain') : UI.pill(t('reports.noneFound'), 'warn')));
+        })))),
+        h('p', { class: 'small muted' }, t('reports.retentionHow'))],
+      foot: [h('a', { class: 'btn', href: '#yenilemeler', onClick: function () { m.close(); } }, icon('refresh-cw'), t('nav.renewals')),
+        h('span', { class: 'spacer' }), h('button', { type: 'button', class: 'btn', onClick: function () { m.close(); } }, t('common.close'))]
     });
   };
 
@@ -11248,24 +11493,33 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
           { label: t('dash.metric.premium'), align: 'r', value: function (r) { return F.money(r.premium); } },
           { label: t('dash.metric.commission'), align: 'r', value: function (r) { return F.money(r.commission); } }
         ], byCust)));
-      // retention by expiry month
+      // renewal rate by the month a policy ENDS in (not the month it was sold in): was a renewal found for it?
       var expRows = [];
-      var byExp = U.groupBy(d.policies.filter(function (p) { var i = d.renewal.get(p.id); return p.endDate && p.endDate < d.today && i && i.state !== 'short' && i.state !== 'none'; }), function (p) { return U.monthKeyOf(p.endDate); });
+      var byExp = U.groupBy(d.policies.filter(function (p) {
+        var i = d.renewal.get(p.id);
+        return p.endDate && p.endDate < d.today && i && i.state !== 'short' && i.state !== 'none' && i.state !== 'cancelled';
+      }), function (p) { return U.monthKeyOf(p.endDate); });
       Array.from(byExp.keys()).sort().slice(-12).forEach(function (k) {
         var ps = byExp.get(k);
-        var ren = ps.filter(function (p) { return d.renewal.get(p.id).state === 'renewed'; }).length;
-        var lost = ps.filter(function (p) { return d.renewal.get(p.id).state === 'lost'; }).length;
-        expRows.push({ key: k, n: ps.length, renewed: ren, lost: lost, open: ps.length - ren - lost });
+        var st = function (s) { return ps.filter(function (p) { return d.renewal.get(p.id).state === s; }); };
+        expRows.push({ key: k, all: ps, renewed: st('renewed'), lost: st('lost'), open: st('expired') });
       });
+      function countBtn(r, which, label) {
+        var list = r[which];
+        if (!list.length) return F.num(0);
+        return h('button', { type: 'button', class: 'link-btn num', id: 'ret-' + r.key + '-' + which, title: t('reports.retShow'),
+          onClick: function () { App.renewalListDialog(label + ' · ' + t('reports.retEnding', { m: F.month(r.key) }), list); } }, F.num(list.length));
+      }
       var retCard = h('section', { class: 'card', id: 'rep-retention' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.retention')), h('span', { class: 'sub' }, t('reports.retentionSub'))),
         h('div', { class: 'card-body flush', style: { marginTop: '10px' } }, expRows.length ? Charts.miniTable([
           { label: t('reports.expiryMonth'), value: function (r) { return F.month(r.key); } },
-          { label: t('reports.expired'), align: 'r', value: function (r) { return F.num(r.n); } },
-          { label: t('state.renewed'), align: 'r', value: function (r) { return F.num(r.renewed); } },
-          { label: t('state.lost'), align: 'r', value: function (r) { return F.num(r.lost); } },
-          { label: t('reports.notRenewed'), align: 'r', value: function (r) { return F.num(r.open); } },
-          { label: t('reports.rate'), align: 'r', value: function (r) { return F.pct(r.n ? r.renewed / r.n : null, 0); } }
-        ], expRows) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('reports.noRetention'))));
+          { label: t('reports.expired'), align: 'r', value: function (r) { return countBtn(r, 'all', t('reports.expired')); } },
+          { label: t('state.renewed'), align: 'r', value: function (r) { return countBtn(r, 'renewed', t('state.renewed')); } },
+          { label: t('state.lost'), align: 'r', value: function (r) { return countBtn(r, 'lost', t('state.lost')); } },
+          { label: t('reports.notRenewed'), align: 'r', value: function (r) { return countBtn(r, 'open', t('reports.notRenewed')); } },
+          { label: t('reports.rate'), align: 'r', value: function (r) { return F.pct(r.all.length ? r.renewed.length / r.all.length : null, 0); } }
+        ], expRows) : h('p', { class: 'muted', style: { padding: '0 18px 18px' } }, t('reports.noRetention')),
+          expRows.length ? h('p', { class: 'small muted', id: 'rep-retention-note', style: { padding: '8px 18px 14px' } }, t('reports.retentionNote')) : null));
       // cancellations (İptal blocks of the months)
       var cancelRows = cancelRowsByMonth(filteredCancels(vs), list);
       var cancelCard = h('section', { class: 'card', id: 'rep-cancels' }, h('div', { class: 'card-head' }, h('h2', null, t('reports.cancelTitle')), h('span', { class: 'sub' }, t('reports.cancelSub'))),
@@ -11900,6 +12154,12 @@ window.SAMPLE_XLSX_BASE64 = "UEsDBBQAAAAIAPyUX11Gx01IlQAAAM0AAAAQAAAAZG9jUHJvcHM
           h('div', { class: 'span-6' }, UI.field({ id: 'set-phone', label: t('settings.agencyPhone'), input: a.phone })),
           h('div', { class: 'span-6' }, UI.field({ id: 'set-email', label: t('settings.agencyEmail'), input: a.email })),
           h('div', { class: 'span-6' }, UI.field({ id: 'set-address', label: t('settings.agencyAddress'), input: a.address })),
+          // the picture in the top-left corner and on printed statements
+          h('div', { class: 'span-12 row', id: 'settings-logo', style: { gap: '12px', alignItems: 'center' } },
+            h('div', { class: 'logo-preview' }, s.logo ? h('img', { src: s.logo, alt: t('logo.title') }) : h('span', { class: 'brand-initials' }, UI.initials(s.agencyName || 'Sigorta Portföy'))),
+            h('div', { style: { flex: '1 1 200px', minWidth: 0 } }, h('div', { style: { fontWeight: 600 } }, t('logo.title')), h('div', { class: 'small muted' }, t('logo.sub'))),
+            h('button', { type: 'button', class: 'btn btn-sm', id: 'logo-pick', onClick: function () { App.pickLogo(); } }, icon('image-plus'), s.logo ? t('logo.change') : t('logo.pick')),
+            s.logo ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost', id: 'logo-remove', onClick: function () { App.removeLogo(); } }, icon('trash-2'), t('logo.remove')) : null),
           h('div', { class: 'span-12 row' }, h('button', { type: 'submit', class: 'btn btn-primary', id: 'save-agency' }, icon('save'), t('common.save')))));
 
       // appearance

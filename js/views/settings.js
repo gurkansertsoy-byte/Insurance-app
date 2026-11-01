@@ -47,6 +47,12 @@
           h('div', { class: 'span-6' }, UI.field({ id: 'set-phone', label: t('settings.agencyPhone'), input: a.phone })),
           h('div', { class: 'span-6' }, UI.field({ id: 'set-email', label: t('settings.agencyEmail'), input: a.email })),
           h('div', { class: 'span-6' }, UI.field({ id: 'set-address', label: t('settings.agencyAddress'), input: a.address })),
+          // the picture in the top-left corner and on printed statements
+          h('div', { class: 'span-12 row', id: 'settings-logo', style: { gap: '12px', alignItems: 'center' } },
+            h('div', { class: 'logo-preview' }, s.logo ? h('img', { src: s.logo, alt: t('logo.title') }) : h('span', { class: 'brand-initials' }, UI.initials(s.agencyName || 'Sigorta Portföy'))),
+            h('div', { style: { flex: '1 1 200px', minWidth: 0 } }, h('div', { style: { fontWeight: 600 } }, t('logo.title')), h('div', { class: 'small muted' }, t('logo.sub'))),
+            h('button', { type: 'button', class: 'btn btn-sm', id: 'logo-pick', onClick: function () { App.pickLogo(); } }, icon('image-plus'), s.logo ? t('logo.change') : t('logo.pick')),
+            s.logo ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost', id: 'logo-remove', onClick: function () { App.removeLogo(); } }, icon('trash-2'), t('logo.remove')) : null),
           h('div', { class: 'span-12 row' }, h('button', { type: 'submit', class: 'btn btn-primary', id: 'save-agency' }, icon('save'), t('common.save')))));
 
       // appearance

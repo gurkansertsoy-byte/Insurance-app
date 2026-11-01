@@ -225,17 +225,28 @@ Search from anywhere (Ctrl + K): name, TC, phone, plate or policy number.
 | One card per month (= one sheet): policies, new business, premium, commission and change. | A month exactly as in the Excel sheet, with its own columns; add a row to that month or export it. |
 | ![Policies](docs/screenshots/15-policies.png) | ![Renewals](docs/screenshots/16-renewals.png) |
 | All policies: one search box (customer, policy no, plate, TC), month, company and branch lists, and one row of choices with their counts — all, yeni iş, yenileme, ek / zeyil, renewal coming up, expired, cancelled. | Renewals by days left; renewed policies are found automatically in later months. Status (called, quoted, renewed, lost + reason), a ready WhatsApp message, reminder task, one-click renewal form. |
-| ![Cross-sell](docs/screenshots/17-cross-sell.png) | |
-| **Çapraz satış** (in the menu): customers who could buy one more policy — kasko for a car with only a traffic policy, a traffic policy for a car with only kasko, home insurance next to DASK and DASK next to home insurance. One button per kind with its count, search by name, plate or phone, a task in one click, Excel export. | |
+| ![Cross-sell](docs/screenshots/17-cross-sell.png) | ![Same month, every year](docs/screenshots/47-same-month.png) |
+| **Çapraz satış** (in the menu): customers who could buy one more policy — kasko for a car with only a traffic policy, a traffic policy for a car with only kasko, home insurance next to DASK and DASK next to home insurance. One button per kind with its count, search by name, plate or phone, a task in one click, Excel export. | **The same month, year by year** (Aylık üretim, and on a month's own page when the file has that month in more than one year): Ekim 2024, Ekim 2025, Ekim 2026 side by side for premium, commission, number of customers and number of policies — one small chart each, since they have different scales — with the change against the year before and a table view. |
 | ![Tasks](docs/screenshots/19-tasks.png) | ![Reports](docs/screenshots/20-reports.png) |
 | Tasks with due dates, linked to customers; overdue ones show in the menu. | Reports for any period: monthly production, YENİ İŞ kinds per month, payment split, companies, branches, professions, top customers, renewal rate, cancellations with refunds and commission taken back; print or export to Excel. |
+
+![Renewal rate list](docs/screenshots/48-renewal-list.png)
+
+**Yenileme oranı** (in Reports) counts policies by the month they **end** in, not the month they were sold in: the
+October 2026 row is the policies whose end date is in October 2026 (mostly sold in October 2025), while Aylık üretim's
+October 2026 is what was written on the October 2026 page. A policy counts as renewed when a later row has the same
+customer, the same plate or the same policy number, the same line of business, and starts as the old one ends (a
+renewal written on another customer card, with the name typed differently, is found by its plate or number). One
+written with the same number and YENİLEME in the policy's last two months is a renewal, not a cancellation question.
+Cancelled policies are left out. Each number opens the list of its policies with the renewal found for each; one not
+found can be marked renewed or lost on the Renewals page.
 
 ### 8. Settings, backup and your data
 
 | | |
 | --- | --- |
-| ![Settings](docs/screenshots/21-settings.png) | ![Duplicates](docs/screenshots/22-duplicates.png) |
-| Agency details, language, theme, rows per page, hiding TC numbers on screen (KVKK), renewal window, WhatsApp template. Backup to one `.json` file and restore; whole portfolio to Excel (one sheet per month in your own column order + summary + customers). | Finds customers that may be the same person and merges them. |
+| ![Settings](docs/screenshots/49-logo.png) | ![Duplicates](docs/screenshots/22-duplicates.png) |
+| Agency details and **the agency's picture** (also chosen by clicking the square in the top-left corner; shown there and on printed statements), language, theme, rows per page, hiding TC numbers on screen (KVKK), renewal window, WhatsApp template. Backup to one `.json` file and restore; whole portfolio to Excel (one sheet per month in your own column order + summary + customers). | Finds customers that may be the same person and merges them. |
 
 Data stays on this computer: it is kept in the browser's database (IndexedDB) and in your own Excel
 file, and is never sent anywhere. Take a backup regularly (the menu shows when the last one was taken);

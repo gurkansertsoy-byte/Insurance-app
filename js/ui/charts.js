@@ -121,7 +121,7 @@
           fill: 'none', stroke: color, 'stroke-width': 1.5, 'stroke-dasharray': '3 2' }) : h('path', { class: 'mark', d: roundTop(cx - bw / 2, yy, bw, y(0) - yy, 4), fill: color });
         svg.appendChild(bar);
         if ((lastIdx - i) % every === 0) svg.appendChild(h('text', { x: cx, y: H - 9, 'text-anchor': 'middle', class: 'lbl' }, d.short || d.label));
-        if (v > 0 && (i === lastIdx || (i === maxIdx && labelMax))) {
+        if (v > 0 && (o.labelAll || i === lastIdx || (i === maxIdx && labelMax))) {
           svg.appendChild(h('text', { x: cx, y: yy - 7, 'text-anchor': 'middle', class: 'val' }, (o.labelFormat || o.format)(v)));
         }
         var hit = h('rect', { class: 'hit', x: padL + band * i, y: padT - 8, width: band, height: plotH + padB, tabindex: 0, role: 'img', 'aria-label': d.label + ': ' + o.format(v) });

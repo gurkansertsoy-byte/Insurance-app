@@ -90,6 +90,7 @@ test('policy list: totals, filters and export', async () => {
   await page.fill('#policies-q', '34 kma 482');
   await page.waitForFunction(() => document.querySelectorAll('.tableview tbody tr').length === 2);
   await page.fill('#policies-q', '');
+  await page.waitForFunction(() => document.querySelectorAll('.tableview tbody tr').length > 2);
   await page.selectOption('#policies-company', 'allianz');
   await page.click('#policies-show-renewal');
   const shown = await count();

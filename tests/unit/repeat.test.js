@@ -164,3 +164,20 @@ test('Excel export: cancelling rows stay rows of their month; the summary counts
   assert.ok(sheet.slice(1).some(r => r.includes(-6000)), 'the cancelling row keeps its minus amount');
   assert.deepEqual(sheet.slice(1).map(r => r[blockAt]).filter(Boolean), ['ANA'], 'only the İptal block row goes into the block');
 });
+
+test('renewals: found on another customer card by plate or policy number; an early YENİLEME with the same number is no question', () => {
+  const old = pol({ customerId: 'c1', month: '2025-10', policyNo: 'RY-555', policyType: 'Trafik', plate: '34 AB 12', premium: 9000, endDate: '2026-10-20' });
+  // the renewal written under a second card (the name typed differently), same car
+  const byPlate = pol({ customerId: 'c2', month: '2026-10', policyNo: 'RY-777', policyType: 'Zorunlu Trafik', plate: '34AB12', premium: 9900, endDate: '2027-10-20' });
+  const home = pol({ customerId: 'c1', month: '2025-10', policyNo: 'DG-88001', policyType: 'Konut', premium: 2000, endDate: '2026-10-25' });
+  // renewed a month early under the same policy number, on another card
+  const early = pol({ customerId: 'c2', month: '2026-09', policyNo: 'DG-88001', policyType: 'Konut', premium: 2200, endDate: '2027-10-25', businessText: 'YENİLEME' });
+  const all = [old, byPlate, home, early];
+  const info = P.renewalInfo(all, { today: '2026-11-01' });
+  assert.deepEqual([info.get(old.id).state, info.get(old.id).successorId], ['renewed', byPlate.id]);
+  assert.deepEqual([info.get(home.id).state, info.get(home.id).successorId], ['renewed', early.id]);
+  assert.equal(P.findRepeats(all, customers).has(early.id), false, 'not asked as a cancellation');
+  // the same number written again with YENİLEME in the middle of the year is still asked about
+  const mid = pol({ customerId: 'c1', month: '2026-03', policyNo: 'DG-88001', policyType: 'Konut', premium: 500, businessText: 'YENİLEME' });
+  assert.equal(P.findRepeats([home, mid], customers).get(mid.id).state, 'ask');
+});
