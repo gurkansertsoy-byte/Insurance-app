@@ -14,6 +14,9 @@ let css = read('css/app.css').replace(/url\(\.\.\/assets\/fonts\/([^)]+)\)/g, (m
   const data = fs.readFileSync(path.join(root, 'assets', 'fonts', file)).toString('base64');
   return `url(data:font/woff2;base64,${data})`;
 });
+// the themes come right after the main stylesheet
+css += '\n' + read('css/skins.css');
+html = html.replace('<link rel="stylesheet" href="css/skins.css">\n', '');
 html = html.replace('<link rel="stylesheet" href="css/app.css">', () => `<style>\n${css}\n</style>`);
 
 // inline every script; the sample workbook goes in too so the demo works without a server

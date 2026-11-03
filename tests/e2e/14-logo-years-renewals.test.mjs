@@ -16,12 +16,15 @@ test('a click on the top-left square chooses a picture; it stays after a reload 
   assert.match(await page.getAttribute('#brand-logo', 'aria-label'), /Resim seç/);
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('#brand-logo')]);
   await chooser.setFiles(LOGO);
+  // the picture opens large to be arranged; Tamam keeps what is in the frame
+  await page.waitForSelector('dialog[open] #logo-canvas');
+  await page.click('#logo-save');
   await page.waitForSelector('#brand-logo img');
   const src = await page.getAttribute('#brand-logo img', 'src');
   assert.match(src, /^data:image\/(png|jpeg);base64,/);
-  // shrunk to at most 192 px
+  // a 192 px square
   const size = await page.evaluate((s) => new Promise((r) => { const i = new Image(); i.onload = () => r([i.width, i.height]); i.src = s; }), src);
-  assert.ok(size[0] <= 192 && size[1] <= 192 && size[0] > size[1], 'wide picture kept wide: ' + size);
+  assert.deepEqual(size, [192, 192]);
   assert.match(await page.getAttribute('#brand-logo', 'aria-label'), /Resmi değiştir/);
   await page.reload();
   await page.waitForSelector('#brand-logo img');

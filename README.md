@@ -252,7 +252,18 @@ Data stays on this computer: it is kept in the browser's database (IndexedDB) an
 file, and is never sent anywhere. Take a backup regularly (the menu shows when the last one was taken);
 a backup restores everything on another computer or browser.
 
-### 9. Print, English, dark mode, phone
+### 9. Themes, background and the agency's picture
+
+| | |
+| --- | --- |
+| ![Themes](docs/screenshots/51-themes.png) | ![Picture editor](docs/screenshots/50-logo-editor.png) |
+| **13 themes** (Ayarlar → Tema): Deniz yeşili, Gece mavisi, Okyanus, Orman, Nane, Bordo, Gül, Lavanta, Gün batımı, Altın, Kağıt, Grafit and Yüksek kontrast. A theme changes colours, the roundness of buttons, cards and fields (sharp, rounded or pill-shaped), the look of the chosen menu item, line thickness and, for Kağıt, the heading font — buttons, tabs and pages stay where they are. Each has its own light and dark colours (Açık / Koyu / Cihaz ayarı), checked for readable contrast. | **The picture in the top-left corner** opens large after it is chosen (and again with a click on the corner): drag it with the mouse or a finger, zoom with the mouse wheel, by spreading or pinching two fingers, or with the slider; *Tamamı görünsün* / *Çerçeveyi doldur*, white or theme colour behind it, a live preview of the corner. *Tamam* keeps it, and how it was arranged. |
+| ![Sunset](docs/screenshots/52-theme-sunset.png) | ![Mint](docs/screenshots/53-theme-mint.png) |
+| Gün batımı: pill-shaped buttons and menu. | Nane: a light menu. |
+| ![Paper](docs/screenshots/54-theme-paper.png) | ![Background](docs/screenshots/55-background.png) |
+| Kağıt: cream paper, serif headings, square corners. | **Background** behind the pages: a picture of your own (shrunk, with a *Soluklaştır* slider so text stays readable) or one of 12 suggestions drawn in the theme's colours — Kuzey ışıkları, Renk bulutu, Gün doğumu, Deniz, Dalgalar, Dağlar, Noktalı, Kareli defter, Çizgili, Petek, Harita çizgileri, Kağıt dokusu. |
+
+### 10. Print, English, dark mode, phone
 
 | | |
 | --- | --- |
@@ -282,11 +293,13 @@ npm run test:e2e     # browser tests (Playwright): every screen and button, auto
 npm run build        # dist/sigorta-portfoy.html, the single-file version
 npm run screenshots  # docs/screenshots/
 npm run sample       # regenerate the sample workbook (Python + openpyxl)
+node tools/build-skins.mjs   # css/skins.css from the theme table (stops if a theme's text contrast is too low)
 ```
 
 ```
 index.html           app shell
 css/app.css          styles (light and dark)
+css/skins.css        the 13 themes (generated)
 js/core/             util, schema (columns and synonyms), importer, portfolio (matching, renewals, İptal),
                      exporter, db, store, excelsync (writes into the workbook), filelink (the linked file)
 js/ui/               DOM helpers, charts

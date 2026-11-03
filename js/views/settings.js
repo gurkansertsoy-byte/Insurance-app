@@ -51,14 +51,12 @@
           h('div', { class: 'span-12 row', id: 'settings-logo', style: { gap: '12px', alignItems: 'center' } },
             h('div', { class: 'logo-preview' }, s.logo ? h('img', { src: s.logo, alt: t('logo.title') }) : h('span', { class: 'brand-initials' }, UI.initials(s.agencyName || 'Sigorta Portföy'))),
             h('div', { style: { flex: '1 1 200px', minWidth: 0 } }, h('div', { style: { fontWeight: 600 } }, t('logo.title')), h('div', { class: 'small muted' }, t('logo.sub'))),
-            h('button', { type: 'button', class: 'btn btn-sm', id: 'logo-pick', onClick: function () { App.pickLogo(); } }, icon('image-plus'), s.logo ? t('logo.change') : t('logo.pick')),
+            s.logo ? h('button', { type: 'button', class: 'btn btn-sm', id: 'logo-edit', onClick: function () { App.pickLogo(); } }, icon('pencil'), t('logo.edit')) : null,
+            h('button', { type: 'button', class: 'btn btn-sm', id: 'logo-pick', onClick: function () { App.chooseLogoFile(); } }, icon('image-plus'), s.logo ? t('logo.change') : t('logo.pick')),
             s.logo ? h('button', { type: 'button', class: 'btn btn-sm btn-ghost', id: 'logo-remove', onClick: function () { App.removeLogo(); } }, icon('trash-2'), t('logo.remove')) : null),
           h('div', { class: 'span-12 row' }, h('button', { type: 'submit', class: 'btn btn-primary', id: 'save-agency' }, icon('save'), t('common.save')))));
 
       // appearance
-      var themeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': t('app.theme') }, ['system', 'light', 'dark'].map(function (th) {
-        return h('button', { type: 'button', id: 'theme-' + th, 'aria-pressed': String((s.theme || 'system') === th), onClick: function () { Store.setSetting('theme', th); } }, t('settings.theme.' + th));
-      }));
       var langSel = UI.select('set-lang', [{ value: 'tr', label: 'Türkçe' }, { value: 'en', label: 'English' }], window.I18N.lang, { class: 'input', style: { width: 'auto' }, 'aria-label': t('settings.language'), onChange: function (e) { window.I18N.setLang(e.target.value); Store.setSetting('lang', e.target.value); } });
       var pageSel = UI.select('set-page', [25, 50, 100, 200].map(function (n) { return { value: n, label: String(n) }; }), s.pageSize, { class: 'input', style: { width: 'auto' }, 'aria-label': t('settings.pageSize'), onChange: function (e) { Store.setSetting('pageSize', Number(e.target.value)); } });
       var mask = h('input', { type: 'checkbox', id: 'set-mask', checked: !!s.maskIds, onChange: function (e) { Store.setSetting('maskIds', e.target.checked); } });
@@ -67,7 +65,6 @@
         h('div', { class: 'card-head' }, h('h2', null, t('settings.appearance'))),
         h('div', { class: 'card-body' },
           setting(t('settings.language'), t('settings.languageSub'), langSel),
-          setting(t('app.theme'), t('settings.themeSub'), themeSeg),
           setting(t('settings.pageSize'), t('settings.pageSizeSub'), pageSel),
           setting(t('settings.mask'), t('settings.maskSub'), h('label', { class: 'check', for: 'set-mask' }, mask, t('settings.maskOn'))),
           setting(t('settings.window'), t('settings.windowSub'), win)));
@@ -157,9 +154,9 @@
           h('p', { class: 'small muted' }, t('settings.libs')),
           h('p', { class: 'small muted' }, t('settings.shortcuts'))));
 
-      var node = h('div', { class: 'settings-grid' },
+      var node = h('div', { class: 'stack' }, App.themeCard(), h('div', { class: 'settings-grid' },
         h('div', { class: 'stack' }, agency, appearance, template),
-        h('div', { class: 'stack' }, App.excelCard(), data, storage, about));
+        h('div', { class: 'stack' }, App.excelCard(), data, storage, about)));
       if (App.viewState.settingsFocus) {
         var f = App.viewState.settingsFocus;
         App.viewState.settingsFocus = null;

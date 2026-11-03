@@ -45,60 +45,7 @@
     { id: 'ayarlar', icon: 'settings', label: 'nav.settings' }
   ];
 
-  // ------------------------------------------------------------------ the agency's picture
-  /** Opens the file chooser for the picture in the top-left corner. */
-  App.pickLogo = function () {
-    var input = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/bmp', hidden: true });
-    input.addEventListener('change', function () {
-      var f = input.files && input.files[0];
-      input.remove();
-      if (f) App.setLogoFile(f);
-    });
-    document.body.appendChild(input);
-    input.click();
-  };
-
-  /** Shrinks the picture to at most 192 × 192 (it is shown at 40 px) and keeps it with the settings and backups. */
-  App.setLogoFile = function (file) {
-    if (!file || !/^image\//.test(file.type || '') && !/\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(file.name || '')) { UI.toast(t('logo.notImage'), { type: 'bad' }); return Promise.resolve(false); }
-    if (file.size > 20 * 1048576) { UI.toast(t('logo.tooBig'), { type: 'bad' }); return Promise.resolve(false); }
-    var url = URL.createObjectURL(file);
-    return new Promise(function (resolve) {
-      var img = new Image();
-      img.onload = function () {
-        var w = img.naturalWidth || 192, hgt = img.naturalHeight || 192;
-        var k = Math.min(1, 192 / Math.max(w, hgt));
-        var cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(hgt * k));
-        var canvas = document.createElement('canvas');
-        canvas.width = cw; canvas.height = ch;
-        var ctx = canvas.getContext('2d');
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, cw, ch);
-        var data = canvas.toDataURL('image/png');
-        if (data.length > 200000) {
-          // a photo: JPEG on white is a tenth of the size
-          ctx.globalCompositeOperation = 'destination-over';
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, cw, ch);
-          data = canvas.toDataURL('image/jpeg', 0.88);
-        }
-        URL.revokeObjectURL(url);
-        var before = Store.settings.logo || '';
-        Store.updateSettings({ logo: data });
-        UI.toast(t('logo.saved'), { action: { label: t('common.undo'), fn: function () { Store.updateSettings({ logo: before }); } } });
-        resolve(true);
-      };
-      img.onerror = function () { URL.revokeObjectURL(url); UI.toast(t('logo.notImage'), { type: 'bad' }); resolve(false); };
-      img.src = url;
-    });
-  };
-
-  App.removeLogo = function () {
-    var before = Store.settings.logo || '';
-    if (!before) return;
-    Store.updateSettings({ logo: '' });
-    UI.toast(t('logo.removed'), { action: { label: t('common.undo'), fn: function () { Store.updateSettings({ logo: before }); } } });
-  };
+  // the agency's picture, its editor, themes and backgrounds: js/views/appearance.js
 
   App.dueCount = function () {
     var n = 0;
@@ -158,7 +105,9 @@
     // the linked Excel file's notices live outside the page, so a page being filled in is never redrawn for them
     els.notice = h('div', { class: 'excel-notices', id: 'excel-notices' });
     els.scrim = h('div', { class: 'scrim', hidden: true, onClick: function () { setNav(false); } });
-    els.app = h('div', { class: 'app' }, els.sidebar, h('div', { class: 'main' }, els.topbar, els.notice, els.content), els.scrim);
+    // the background picture behind the work area (Settings → Tema), dimmed by its own layer
+    els.bg = h('div', { class: 'app-bg', id: 'app-bg', 'aria-hidden': 'true' }, h('div', { class: 'app-bg-img' }), h('div', { class: 'app-bg-dim' }));
+    els.app = h('div', { class: 'app' }, els.sidebar, h('div', { class: 'main' }, els.bg, els.topbar, els.notice, els.content), els.scrim);
     root.appendChild(els.app);
     updateShellTexts();
   }
@@ -174,6 +123,7 @@
     els.brandName.textContent = s.agencyName || 'Sigorta Portföy';
     UI.clear(els.brandMark);
     els.brandMark.classList.toggle('has-logo', !!s.logo);
+    els.brandMark.classList.toggle('clear', !!(s.logo && s.logoCrop && s.logoCrop.bg === 'none'));
     els.brandMark.appendChild(s.logo ? h('img', { src: s.logo, alt: '' }) : h('span', { class: 'brand-initials' }, UI.initials(s.agencyName || 'Sigorta Portföy')));
     els.brandMark.appendChild(h('span', { class: 'brand-cam', 'aria-hidden': 'true' }, icon('camera')));
     els.brandMark.title = s.logo ? t('logo.change') : t('logo.pick');
@@ -240,6 +190,7 @@
     var th = Store.settings.theme || 'system';
     if (th === 'system' && !hostTheme) document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', th === 'system' ? hostTheme : th);
+    if (App.applyAppearance) App.applyAppearance();
   }
   App.applyTheme = applyTheme;
 
@@ -364,7 +315,7 @@
   function prefs() {
     var p = {};
     try {
-      ['lang', 'theme'].forEach(function (k) {
+      ['lang', 'theme', 'skin'].forEach(function (k) {
         var v = window.localStorage.getItem('sp:pref:' + k);
         if (v) p[k] = JSON.parse(v);
       });
@@ -374,6 +325,8 @@
 
   App.boot = function () {
     var p = prefs();
+    // the theme before the first paint, so the page does not flash in another colour
+    if (p.skin) document.documentElement.setAttribute('data-skin', p.skin);
     if (p.lang) I18N.setLang(p.lang);
     if (p.theme) Store.settings.theme = p.theme;
     applyTheme();

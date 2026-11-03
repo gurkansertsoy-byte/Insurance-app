@@ -480,11 +480,31 @@ async function repeats() {
     // the agency's picture in the top-left corner
     const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('#brand-logo')]);
     await chooser.setFiles(path.join(ROOT, 'tests', 'e2e', 'fixtures', 'ajans-logo.svg'));
+    await page.waitForSelector('dialog[open] #logo-canvas');
+    await page.waitForTimeout(300);
+    await snap(page, '50-logo-editor', { keepMouse: true });
+    await page.click('#logo-save');
     await page.waitForSelector('#brand-logo img');
     await go(page, 'ayarlar');
     await waitHash(page, '#ayarlar');
     await page.waitForSelector('#settings-logo img');
     await snap(page, '49-logo');
+    // themes and backgrounds
+    await page.locator('#settings-themes').screenshot({ path: path.join(DIR, '51-themes.png') });
+    console.log('  51-themes.png');
+    for (const [skin, name] of [['gunbatimi', '52-theme-sunset'], ['nane', '53-theme-mint'], ['kagit', '54-theme-paper']]) {
+      await page.click('#skin-' + skin);
+      await go(page, 'panel');
+      await waitHash(page, '#panel');
+      await snap(page, name);
+      await go(page, 'ayarlar');
+      await waitHash(page, '#ayarlar');
+    }
+    await page.click('#skin-okyanus');
+    await page.click('#bg-mountains');
+    await go(page, 'panel');
+    await waitHash(page, '#panel');
+    await snap(page, '55-background');
     if (env.errors.length) throw new Error(env.errors.join('\n'));
   } finally { await env.close(); }
 }
