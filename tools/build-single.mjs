@@ -16,12 +16,13 @@ let css = read('css/app.css').replace(/url\(\.\.\/assets\/fonts\/([^)]+)\)/g, (m
 });
 // the themes come right after the main stylesheet
 css += '\n' + read('css/skins.css');
-html = html.replace('<link rel="stylesheet" href="css/skins.css">\n', '');
+// (line ends may be \r\n: a Windows checkout)
+html = html.replace(/<link rel="stylesheet" href="css\/skins\.css">\r?\n?/, '');
 html = html.replace('<link rel="stylesheet" href="css/app.css">', () => `<style>\n${css}\n</style>`);
 
 // inline every script; the sample workbook goes in too so the demo works without a server
 const scripts = [];
-html = html.replace(/<script src="([^"]+)"><\/script>\n?/g, (m, src) => { scripts.push(src); return ''; });
+html = html.replace(/<script src="([^"]+)"><\/script>\r?\n?/g, (m, src) => { scripts.push(src); return ''; });
 scripts.splice(scripts.indexOf('js/app.js'), 0, 'js/sample-data.js');
 // U+FFFD (SheetJS code-page tables) is written as the escape \ufffd: same string, and no editor or checker mistakes it for a broken character
 const safe = (js) => js.replace(/<\/script/gi, '<\\/script').replace(/\uFFFD/g, '\\ufffd');

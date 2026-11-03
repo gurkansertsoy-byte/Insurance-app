@@ -11,6 +11,13 @@ execFileSync(process.execPath, [path.join(root, 'tools', 'build-single.mjs')], {
 
 const from = path.join(root, 'dist', 'sigorta-portfoy.html');
 const to = path.join(here, 'app', 'sigorta-portfoy.html');
+// the program holds this one page and nothing else: it must not point at any other file
+const html = fs.readFileSync(from, 'utf8');
+const outside = [...html.matchAll(/<link\b[^>]*\bhref="(?!data:|#)[^"]*"[^>]*>|<script\b[^>]*\bsrc="[^"]*"[^>]*>/gi)].map((m) => m[0]);
+if (outside.length) {
+  console.error('dist/sigorta-portfoy.html still points at other files, which the program does not have:\n  ' + outside.join('\n  '));
+  process.exit(1);
+}
 fs.mkdirSync(path.dirname(to), { recursive: true });
 fs.copyFileSync(from, to);
 

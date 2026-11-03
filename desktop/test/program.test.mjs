@@ -74,6 +74,9 @@ test('opens the app in a window of its own', async () => {
     assert.equal(info.node, 'undefinedundefined', 'the page has no Node.js');
     assert.ok(info.foot, 'the menu says the data is on this computer');
     assert.match(info.ua, /^[\x20-\x7e]+$/, 'plain ASCII user agent');
+    // everything is inside the one page (a stylesheet left as a link would not be found in the program)
+    const outside = await page.evaluate(() => [...document.querySelectorAll('link[href]:not([href^="data:"]), script[src]')].map((e) => e.outerHTML));
+    assert.deepEqual(outside, [], 'the page points at no other file');
     assert.equal(await app.evaluate(({ app: a }) => a.getPath('userData')), path.resolve(dir));
     assert.deepEqual(errors, []);
   } finally { await app.close(); }
