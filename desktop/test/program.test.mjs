@@ -36,7 +36,8 @@ async function launch(dataDir) {
   const page = await app.firstWindow();
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text() + (m.location() && m.location().url ? ' @ ' + m.location().url : '')); });
+  page.on('requestfailed', (r) => errors.push('request failed: ' + r.url().slice(0, 200) + ' (' + ((r.failure() && r.failure().errorText) || '?') + ')'));
   await page.waitForFunction(() => window.App && window.App.renderedHash != null, null, { timeout: 60000 });
   return { app, page, errors };
 }
