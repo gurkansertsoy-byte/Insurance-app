@@ -1,0 +1,81 @@
+{
+  "name": "sigorta-portfoy",
+  "productName": "Sigorta Portföy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sigorta Portföy - Windows programı",
+  "author": "Sigorta Portföy",
+  "license": "MIT",
+  "repository": "github:gurkansertsoy-byte/Insurance-app",
+  "main": "main.js",
+  "scripts": {
+    "start": "node scripts/prepare.mjs && electron .",
+    "dist": "node scripts/prepare.mjs && electron-builder --win --x64 --publish never",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "icon": "node scripts/make-icon.mjs"
+  },
+  "devDependencies": {
+    "electron": "44.10.1",
+    "electron-builder": "26.18.1",
+    "playwright-core": "1.64.1"
+  },
+  "build": {
+    "appId": "com.sigortaportfoy.app",
+    "productName": "Sigorta Portföy",
+    "executableName": "SigortaPortfoy",
+    "copyright": "Sigorta Portföy",
+    "publish": null,
+    "compression": "maximum",
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/sigorta-portfoy.html",
+      "package.json"
+    ],
+    "electronLanguages": [
+      "tr",
+      "en-US"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sigorta Portföy",
+      "uninstallDisplayName": "Sigorta Portföy",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "tr_TR",
+        "en_US"
+      ],
+      "language": "1055",
+      "artifactName": "Sigorta-Portfoy-Kurulum-${version}.${ext}",
+      "differentialPackage": false
+    },
+    "portable": {
+      "artifactName": "Sigorta-Portfoy-Tasinabilir-${version}.${ext}"
+    }
+  }
+}

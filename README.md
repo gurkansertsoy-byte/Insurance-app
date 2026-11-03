@@ -29,7 +29,9 @@ Trafik için primin %10'u, diğerleri için %15'i sayılır; iptalde geri alına
 yenileme, ek, zeyil ve iptal olduğu grafikte gösterilir ("ek" geçen satır yalnızca Ek sayılır, boş hücre
 Bilinmiyor'dur). Yeni kayıt formu, yenileme takibi, WhatsApp hatırlatma, çapraz
 satış listesi, görevler, raporlar ve aynı sütun düzeninde Excel çıktısı vardır. Veriler hiçbir sunucuya
-gönderilmez.
+gönderilmez. Uygulama ayrıca **Windows programı (.exe)** olarak da var: `Sigorta-Portfoy-Kurulum-….exe` ile
+kurulur (yönetici izni gerekmez) ya da `Sigorta-Portfoy-Tasinabilir-….exe` kurulumsuz çalışır; tarayıcı
+gerekmez ve Excel'e kaydetme her açılışta izin istemeden sürer (bkz. [Windows programı](#windows-program)).
 
 ![Dashboard](docs/screenshots/05-dashboard.png)
 
@@ -38,6 +40,7 @@ gönderilmez.
 | Way | How |
 | --- | --- |
 | **One file (easiest)** | Download [`dist/sigorta-portfoy.html`](dist/sigorta-portfoy.html) and double-click it. Works offline in Chrome, Edge, Firefox and Safari; nothing to install. |
+| **Windows program** | Run `Sigorta-Portfoy-Kurulum-1.0.0.exe` (installs in a few seconds, no administrator rights, adds a desktop and Start menu shortcut), or `Sigorta-Portfoy-Tasinabilir-1.0.0.exe` without installing anything. Windows 10 or 11, 64-bit. See [Windows program](#windows-program). |
 | From the repository | Open `index.html` directly, or run `npm run serve` and go to http://127.0.0.1:8080 |
 
 On the first screen choose your Excel file, or press **Örnek veriyle dene** to load the sample
@@ -45,8 +48,8 @@ workbook (`sample-data/ornek-portfoy.xlsx`: 13 monthly sheets, 718 rows — 710 
 cancel an earlier policy by writing its number again — 321 fictional customers, 22 İptal rows). The interface is Turkish; an English version is one click away (EN button in the top bar).
 
 Saving by itself into the new Excel file needs **Chrome or Edge** on a computer (they let a web page
-write to a file you chose). In Firefox and Safari the app keeps an up-to-date copy of your workbook instead,
-which you download with one click.
+write to a file you chose), or the Windows program. In Firefox and Safari the app keeps an up-to-date copy of
+your workbook instead, which you download with one click.
 
 ## What it does
 
@@ -281,6 +284,43 @@ a backup restores everything on another computer or browser.
 
 Works on phones and tablets too: the menu becomes a drawer and tables become cards.
 
+## Windows program
+
+The same app as a Windows program (`desktop/`, made with [Electron](https://www.electronjs.org) 44). It opens in a
+window of its own, needs no browser and no internet, and keeps saving into your Excel file every time it is opened.
+
+| File | What it is |
+| --- | --- |
+| `Sigorta-Portfoy-Kurulum-1.0.0.exe` (about 100 MB) | **The installer (recommended).** Double-click it: it installs in a few seconds for the current Windows user (no administrator rights), puts *Sigorta Portföy* on the desktop and in the Start menu, and opens the program. A newer installer run over it keeps your data. Remove it in Windows Settings → Apps. |
+| `Sigorta-Portfoy-Tasinabilir-1.0.0.exe` (about 100 MB) | **Portable**: one file that runs without installing (from Downloads, a USB stick …). It unpacks itself at every start, so it opens a few seconds slower. |
+
+**Where to get them.** [Actions → Windows programı](https://github.com/gurkansertsoy-byte/Insurance-app/actions/workflows/windows.yml)
+builds both on a Windows machine whenever the app changes, tests the built program there, and keeps the two
+files under **Artifacts** on the run's page (signed in to GitHub; kept for 90 days). Pushing a version tag
+(`git tag v1.0.0 && git push origin v1.0.0`) also puts them on a [release](https://github.com/gurkansertsoy-byte/Insurance-app/releases/latest),
+a download link that stays.
+
+**The first start.** Windows may say *"Windows protected your PC"* / *"Windows bilgisayarınızı korudu"* (SmartScreen),
+because the program is not signed with a paid code-signing certificate: click **More info → Run anyway**
+(*Ek bilgi → Yine de çalıştır*). It asks only the first time a downloaded file is opened.
+
+What is different from the browser:
+
+- **Saving into the Excel file goes on by itself after every start** — there is no *İzin ver* to press (a browser
+  asks once per visit). Closing the window first lets the last change reach the file.
+- The data is kept by the program in `%APPDATA%\SigortaPortfoy` (menu bar with Alt → Yardım → *Veri klasörünü aç*),
+  not in a browser; uninstalling the program leaves it there.
+- Exported files (Excel, backup) open a save dialog in the folder used last time.
+- WhatsApp, web, e-mail and phone links open in your own browser and programs. The app inside the program cannot
+  reach the internet at all, so nothing in it can send your data anywhere.
+- Ctrl + / Ctrl − / Ctrl 0 (and Ctrl + mouse wheel) zoom and are remembered; F11 full screen, F5 reload, Ctrl + P print,
+  right-click to cut, copy and paste. The window keeps its size and place; starting the program again brings the open
+  window to the front.
+
+**From the browser to the program.** They keep their data separately. In the browser: *Ayarlar ve yedek → Yedeği indir*.
+In the program: *Ayarlar ve yedek → Yedek dosyası seç* with that file. Then link the Excel file again in the program:
+*Ayarlar ve yedek → Excel dosyası → Mevcut bir dosyadan devam et*, and choose your "… - guncel.xlsx".
+
 ## Development
 
 No build step and no dependencies at run time: plain HTML, CSS and JavaScript
@@ -296,6 +336,18 @@ npm run sample       # regenerate the sample workbook (Python + openpyxl)
 node tools/build-skins.mjs   # css/skins.css from the theme table (stops if a theme's text contrast is too low)
 ```
 
+The Windows program, in `desktop/` (its own `package.json`, so the app itself keeps no dependencies):
+
+```
+cd desktop && npm ci # Electron, electron-builder and Playwright's Electron driver
+npm start            # the program from the source (dist/sigorta-portfoy.html is built and copied into it first)
+npm run dist         # desktop/out/: the installer and the portable .exe (on Linux this needs wine)
+npm test             # the program's tests: window, data after a restart, links, exports, menus, zoom, one window,
+                     # recovering from a crash, and the real Excel file through the system's file dialogs (Linux:
+                     # xvfb-run -a npm test; with SIGORTA_EXE=out/win-unpacked/SigortaPortfoy.exe the built program)
+npm run icon         # build/icon.ico and build/icon.png, from the shield drawing
+```
+
 ```
 index.html           app shell
 css/app.css          styles (light and dark)
@@ -308,6 +360,9 @@ js/app.js            routing, top bar, menu, search
 tests/unit/          Node tests
 tests/e2e/           browser tests
 tools/               sample generator, single-file build, screenshots, static server
+desktop/             the Windows program: main.js (window, menus, links, save dialogs, the Excel file after a
+                     start), preload.js, build/ (icon), scripts/, test/
+.github/workflows/   windows.yml: builds and tests the Windows program on Windows
 ```
 
 Third-party parts: [SheetJS Community Edition](https://sheetjs.com) 0.20.3 (Apache 2.0),

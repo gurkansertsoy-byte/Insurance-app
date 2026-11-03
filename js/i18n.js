@@ -1027,6 +1027,29 @@
     'common.download': 'Download'
   };
 
+  // The Windows program (desktop/) runs this same page, with the data in the program instead of a browser; its
+  // preload sets window.SigortaPortfoyProgram before the page starts. These texts then say where the data really is.
+  if (root.SigortaPortfoyProgram) {
+    Object.assign(tr, {
+      'nav.storageLocal': 'Veriler bu bilgisayarda kayıtlı',
+      'settings.dataSub': 'Veriler yalnızca bu bilgisayarda, programın kendi klasöründe tutulur',
+      'settings.backend.indexeddb': 'Programın veritabanı',
+      'settings.persistSub': 'Açıkken veriler yer açmak için silinmez',
+      'settings.privacy': 'Verileriniz hiçbir sunucuya gönderilmez. Tüm işlemler bu bilgisayarda yapılır. Düzenli yedek almayı unutmayın.',
+      'xl.b.permission.s': 'Program, {name} dosyasına yazmaya devam etmek için izninizi bekliyor.',
+      'xl.b.permission.dirty': 'Kaydedilmemiş değişiklikler var. İzin verene kadar değişiklikler yalnızca programda saklanır, {name} dosyasına yazılmaz.'
+    });
+    Object.assign(en, {
+      'nav.storageLocal': 'Saved on this computer',
+      'settings.dataSub': 'Data is kept only on this computer, in the program\'s own folder',
+      'settings.backend.indexeddb': 'The program\'s database',
+      'settings.persistSub': 'When on, data is never deleted to free space',
+      'settings.privacy': 'Your data is never sent to a server. Everything runs on this computer. Remember to make regular backups.',
+      'xl.b.permission.s': 'The program is waiting for your permission to keep writing to {name}.',
+      'xl.b.permission.dirty': 'There are unsaved changes. Until you allow it, changes are kept in the program only and not written to {name}.'
+    });
+  }
+
   var DICT = { tr: tr, en: en };
   var missing = new Set();
 
